@@ -1,0 +1,6 @@
+{
+  "name": "Form2Fact — Institutional Scrutiny & Evidence Verification",
+  "description": "Institutional application scrutiny and evidence verification workspace comparing declared claims against supporting documents with full evidence tracing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

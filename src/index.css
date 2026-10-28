@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@theme {
+  --text-xs: 0.875rem;      /* 14px — Table headers, status badges, metadata */
+  --text-xs--line-height: 1.35rem;
+  --text-sm: 1rem;          /* 16px — Primary body & table cell copy */
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1.125rem;    /* 18px — Card & subsection titles (H3) */
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.25rem;       /* 20px — Section headers (H2) */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.625rem;      /* 26px — Page titles (H1) */
+  --text-xl--line-height: 2.125rem;
+  --text-2xl: 1.75rem;      /* 28px — Display KPI numbers & top titles */
+  --text-2xl--line-height: 2.25rem;
+}
+
+@layer base {
+  :root {
+    /* Modern SaaS Design System Tokens (Linear / Stripe / Vercel aesthetic) */
+    --bg-canvas: #F8FAFC;
+    --surface-card: #FFFFFF;
+    --surface-subtle: #F1F5F9;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --brand-primary: #4F46E5;
+    --brand-hover: #4338CA;
+    --brand-tint: #EEF2FF;
+    --border-crisp: #E2E8F0;
+    --border-subtle: #F1F5F9;
+
+    /* Status Semantic Tokens */
+    --status-emerald-bg: #ECFDF5;
+    --status-emerald-text: #065F46;
+    --status-emerald-border: #A7F3D0;
+
+    --status-amber-bg: #FFFBEB;
+    --status-amber-text: #92400E;
+    --status-amber-border: #FDE68A;
+
+    --status-rose-bg: #FFF1F2;
+    --status-rose-text: #9F1239;
+    --status-rose-border: #FECDD3;
+
+    /* Typography Scale & Stack */
+    --font-family-primary: 'Inter';
+    --font-family-stack: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-size-base: 16px;
+    --font-weight-base: 400;
+    --font-line-height-base: 24px;
+
+    /* Spacing & Motion */
+    --radius-xs: 6px;
+    --radius-sm: 8px;
+    --motion-duration-instant: 125ms;
+  }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-family-stack);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-base);
+    line-height: var(--font-line-height-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* WCAG 2.2 AA Focus-Visible Enforcement */
+  *:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+  }
+
+  /* Strict Tabular Numerals for reference numbers, dates, monetary & area metrics */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Crisp minimal scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F8FAFC;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
