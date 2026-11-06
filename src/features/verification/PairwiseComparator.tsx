@@ -246,8 +246,19 @@ export const PairwiseComparator: React.FC<PairwiseComparatorProps> = ({
                 Confidence Rating: <strong className="font-mono text-[#0F172A]">{(result.confidence * 100).toFixed(0)}%</strong>
               </span>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#E2E8F0] text-[#334155]">
-                {result.isDeterministic ? 'Deterministic Heuristic' : 'Semantic Inference'}
+                {result.inferenceSource === 'calibrated_ml'
+                  ? 'Calibrated ML Inference'
+                  : result.inferenceSource === 'deterministic_fallback'
+                  ? 'Deterministic Fallback'
+                  : result.isDeterministic
+                  ? 'Deterministic Heuristic'
+                  : 'Semantic Inference'}
               </span>
+              {result.fallbackApplied && (
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">
+                  Fallback Mode
+                </span>
+              )}
               {result.requiresHumanReview ? (
                 <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]">
                   Human Review Required

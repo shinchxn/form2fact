@@ -204,6 +204,33 @@ async function runDataIntegritySuite() {
     });
     testAssert(notCompRes.label === 'NOT_COMPARABLE', 'Incompatible dimensions return NOT_COMPARABLE');
 
+    // TEST: Explicit Fallback & Model Status Metadata
+    testAssert(matchRes.inferenceSource === 'fast_path', 'Concordant numeric exact match uses fast_path source');
+    testAssert(matchRes.fallbackApplied === false, 'Deterministic match does not mark fallbackApplied');
+    testAssert(matchRes.modelStatus === 'bypassed', 'Fast-path deterministic rule marks modelStatus as bypassed');
+
+    // TEST: Strict Mode when ML service is configured but unavailable
+    const origAiUrl = process.env.AI_SERVICE_URL;
+    const origFallback = process.env.ALLOW_DETERMINISTIC_FALLBACK;
+    try {
+      process.env.AI_SERVICE_URL = 'http://127.0.0.1:59999'; // unreachable dead port
+      process.env.ALLOW_DETERMINISTIC_FALLBACK = 'false';
+
+      const strictRes = await PairwiseFieldClassifier.compare({
+        claimField: { fieldName: 'address', fieldLabel: 'Campus Address', rawValue: 'Plot 12, Phase 3, Industrial Area' },
+        evidenceField: { fieldName: 'address', fieldLabel: 'Campus Address', rawValue: '12 Industrial Area Phase III, Sector 62' },
+        comparisonType: 'generic'
+      });
+
+      testAssert(strictRes.label === 'UNCERTAIN', 'Strict mode with offline ML abstains to UNCERTAIN');
+      testAssert(strictRes.modelStatus === 'unavailable', 'Offline ML service flags modelStatus as unavailable');
+      testAssert(strictRes.fallbackApplied === false, 'Strict mode prevents silent fallback');
+      testAssert(strictRes.modelVersion === 'form2fact-ml-unavailable', 'Strict mode sets explicit unavailable modelVersion');
+    } finally {
+      if (origAiUrl !== undefined) process.env.AI_SERVICE_URL = origAiUrl; else delete process.env.AI_SERVICE_URL;
+      if (origFallback !== undefined) process.env.ALLOW_DETERMINISTIC_FALLBACK = origFallback; else delete process.env.ALLOW_DETERMINISTIC_FALLBACK;
+    }
+
     // -------------------------------------------------------------------------
     // TEST 10 & 11: Immutable Audit Trail & Route Defenses
     // -------------------------------------------------------------------------
