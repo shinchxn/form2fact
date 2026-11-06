@@ -1,0 +1,38 @@
+{
+  "snli": {
+    "name": "snli",
+    "repo": "stanfordnlp/snli",
+    "task": "Natural Language Inference",
+    "license": "CC BY-SA 4.0",
+    "mapping_policy": "entailment -> MATCH (with review), contradiction -> MISMATCH candidate, neutral -> evaluate (not automatically UNCERTAIN)",
+    "status": "Audited and documented for external training integration",
+    "offline_compatible": true
+  },
+  "multi_nli": {
+    "name": "multi_nli",
+    "repo": "nyu-mll/multi_nli",
+    "task": "Multi-Genre NLI",
+    "license": "CC BY-SA 4.0 / ODC Open",
+    "mapping_policy": "Genre-diverse entailment/contradiction reasoning",
+    "status": "Audited and documented for external training integration",
+    "offline_compatible": true
+  },
+  "funsd": {
+    "name": "funsd",
+    "repo": "nielsr/funsd",
+    "task": "Form Understanding & Key-Value Extraction",
+    "license": "Non-commercial research",
+    "mapping_policy": "Document structure & noisy OCR understanding (supporting representation)",
+    "status": "Audited and documented for external training integration",
+    "offline_compatible": true
+  },
+  "splink_synthetic": {
+    "name": "splink_synthetic",
+    "repo": "moj-analytical-services/splink_synthetic_data",
+    "task": "Record Linkage / Entity Resolution",
+    "license": "MIT",
+    "mapping_policy": "Pairwise entity attribute concordance / variation",
+    "status": "Audited and documented for external training integration",
+    "offline_compatible": true
+  }
+}

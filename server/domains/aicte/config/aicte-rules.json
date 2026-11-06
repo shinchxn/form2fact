@@ -1,0 +1,318 @@
+{
+  "catalogId": "AICTE-REGULATORY-RULES",
+  "catalogVersion": "1.0.0",
+  "handbook": {
+    "name": "AICTE Approval Process Handbook",
+    "version": "APH-2024-2027",
+    "officialUrl": "https://aicte-qa.aicte-india.org/sites/default/files/APH%20Final.pdf",
+    "verifiedOn": "2026-11-06"
+  },
+  "lifecycleStates": [
+    "DRAFT",
+    "UNDER_REVIEW",
+    "ACTIVE",
+    "SUPERSEDED",
+    "DISABLED"
+  ],
+  "activationPolicy": {
+    "requireVerifiedSource": true,
+    "requireReviewApproval": true,
+    "unverifiedRulesCanProduceMandatoryFindings": false,
+    "preserveHistoricalVersions": true
+  },
+  "rules": [
+    {
+      "ruleId": "AICTE-APH-PL-001",
+      "title": "Private land lease validity",
+      "requirement": "The registered private land lease must have at least 30 years of validity as of the date of the Council notification.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "MINIMUM_TENURE_FROM_NOTIFICATION",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-002",
+      "title": "Registered private land lease deed",
+      "requirement": "A private land lease deed registered with the competent authority under the Registration Act must be produced.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Land Lease Deed",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-003",
+      "title": "Land conversion certificate",
+      "requirement": "A land conversion certificate issued by the competent authority must be produced.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Land Conversion Certificate",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-004",
+      "title": "Lessor title documents",
+      "requirement": "Title documents of the lessor evidencing acquisition of leasehold rights through a lawful transaction must be produced.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Lessor Title Document",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-005",
+      "title": "Encumbrance certificate",
+      "requirement": "An encumbrance certificate relating to the property must be produced.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Encumbrance Certificate",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-006",
+      "title": "Lessor entity resolution",
+      "requirement": "A resolution of the Trust, Society or Company must be produced when the lessor is one of those entities.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Lessor Resolution",
+      "conditionalOn": "LESSOR_IS_ENTITY",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-007",
+      "title": "Sublease assignment right",
+      "requirement": "For a sublease, the lessor must have the right to assign the leasehold right, evidenced by a registered document.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "SUBLEASE_ASSIGNMENT_RIGHT",
+      "conditionalOn": "IS_SUBLEASE",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PL-008",
+      "title": "Mortgage restriction",
+      "requirement": "Mortgage of land is not permissible under the cited private-land lease checklist.",
+      "appliesTo": [
+        "PRIVATE_LAND"
+      ],
+      "check": "NO_MORTGAGE",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-001",
+      "title": "Approved building plan",
+      "requirement": "The complete building plan approved by the competent authority must be produced for a private lease of a building.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Approved Building Plan",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-002",
+      "title": "Occupancy or completion certificate",
+      "requirement": "An occupancy or completion certificate relating to the property or leased floors must be produced.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Occupancy / Completion Certificate",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-003",
+      "title": "Registered private building lease deed",
+      "requirement": "The lease deed must be registered by the competent authority under the Registration Act.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Building Lease Deed",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-004",
+      "title": "Valid fire safety certificate",
+      "requirement": "A valid Fire Safety Certificate issued by the competent authority must be produced.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Fire Safety Certificate",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-005",
+      "title": "Educational land-use certificate",
+      "requirement": "A Land Use Certificate permitting educational use must be produced.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Land Use Certificate",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    },
+    {
+      "ruleId": "AICTE-APH-PB-006",
+      "title": "Architect-certified floor plans",
+      "requirement": "Floor plans, sections and elevations for the relevant buildings must be provided with room-wise carpet area and architect certification.",
+      "appliesTo": [
+        "PRIVATE_BUILDING"
+      ],
+      "check": "REQUIRED_DOCUMENT",
+      "requiredDocumentType": "Architect Certified Floor Plans",
+      "version": "1.0.0",
+      "status": "UNDER_REVIEW",
+      "sourceVerification": "VERIFIED",
+      "reviewApproval": "PENDING",
+      "sourcePage": 78,
+      "effectivePeriod": {
+        "handbookVersion": "APH-2024-2027",
+        "effectiveFrom": null,
+        "effectiveTo": null
+      },
+      "exceptions": []
+    }
+  ]
+}

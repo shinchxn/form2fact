@@ -1,19 +1,77 @@
-version: '3.8'
+name: form2fact
 
 services:
+  api-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: form2fact-api-server
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-fallback_dev_secret_must_be_32_chars_long_min}
+      - DATABASE_PATH=/app/data/form2fact.db
+      - DOCUMENT_STORAGE_PATH=/app/data/dockets
+      - AI_SERVICE_URL=http://ai-service:8000
+      - OCR_SERVICE_TOKEN=${OCR_SERVICE_TOKEN:-form2fact_ocr_secret_token_2026}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_data:/app/data
+    networks:
+      - form2fact-net
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  ai-service:
+    build:
+      context: ../ai_service
+      dockerfile: Dockerfile
+    container_name: form2fact-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - WORKERS=2
+      - FORM2FACT_ML_MODEL_VERSION=${FORM2FACT_ML_MODEL_VERSION:-form2fact-hybrid-pairwise-v2.0-champion}
+      - FORM2FACT_ML_ABSTENTION_THRESHOLD=${FORM2FACT_ML_ABSTENTION_THRESHOLD:-0.60}
+      - OCR_SERVICE_TOKEN=${OCR_SERVICE_TOKEN:-form2fact_ocr_secret_token_2026}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_models:/workspace/ai_service/models
+    networks:
+      - form2fact-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   postgres:
     image: postgres:16-alpine
     container_name: form2fact-postgres
-    restart: always
+    profiles: ["enterprise"]
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-form2fact_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-form2fact_secure_password_2026}
       POSTGRES_DB: ${POSTGRES_DB:-form2fact_db}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - form2fact-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U form2fact_admin -d form2fact_db"]
       interval: 10s
@@ -23,11 +81,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: form2fact-redis
-    restart: always
-    ports:
-      - "6379:6379"
+    profiles: ["enterprise"]
+    restart: unless-stopped
     volumes:
       - redis_data:/data
+    networks:
+      - form2fact-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -37,64 +96,35 @@ services:
   minio:
     image: minio/minio:latest
     container_name: form2fact-minio
-    restart: always
+    profiles: ["enterprise"]
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-form2fact_minio_admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-form2fact_minio_secret_key_2026}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio_data:/data
+    networks:
+      - form2fact-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 15s
       timeout: 5s
       retries: 5
 
-  ai-service:
-    build:
-      context: ../ai_service
-      dockerfile: Dockerfile
-    container_name: form2fact-ai-service
-    restart: always
-    ports:
-      - "8000:8000"
-    environment:
-      PORT: 8000
-      WORKERS: 2
-    depends_on:
-      - redis
-
-  api-server:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    container_name: form2fact-api-server
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      PORT: 3000
-      NODE_ENV: production
-      DATABASE_URL: postgres://form2fact_admin:form2fact_secure_password_2026@postgres:5432/form2fact_db
-      REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: form2fact_minio_admin
-      S3_SECRET_KEY: form2fact_minio_secret_key_2026
-      S3_BUCKET: form2fact-dockets
-      AI_SERVICE_URL: http://ai-service:8000
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_started
-
 volumes:
+  form2fact_data:
+    name: form2fact_data
+  form2fact_models:
+    name: form2fact_models
   postgres_data:
+    name: form2fact_postgres_data
   redis_data:
+    name: form2fact_redis_data
   minio_data:
+    name: form2fact_minio_data
 
+networks:
+  form2fact-net:
+    name: form2fact-network
+    driver: bridge

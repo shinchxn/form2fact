@@ -95,6 +95,22 @@ export function verifyToken(token: string, customSecret?: string): Authenticated
       organizationId: decoded.organizationId || 'org-aicte-western'
     };
   } catch {
+    // Graceful backward compatibility in non-production: accept tokens signed with fallback dev secret
+    if (process.env.NODE_ENV !== 'production' && !customSecret && JWT_SECRET !== FALLBACK_DEV_SECRET) {
+      try {
+        const decoded = jwt.verify(token, FALLBACK_DEV_SECRET) as any;
+        return {
+          id: decoded.id,
+          displayName: decoded.displayName,
+          email: decoded.email,
+          role: decoded.role as UserRole,
+          department: decoded.department,
+          organizationId: decoded.organizationId || 'org-aicte-western'
+        };
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
 }

@@ -1,0 +1,16 @@
+{
+  "label_to_id": {
+    "MATCH": 0,
+    "MISMATCH": 1,
+    "MISSING": 2,
+    "UNCERTAIN": 3,
+    "NOT_COMPARABLE": 4
+  },
+  "id_to_label": {
+    "0": "MATCH",
+    "1": "MISMATCH",
+    "2": "MISSING",
+    "3": "UNCERTAIN",
+    "4": "NOT_COMPARABLE"
+  }
+}

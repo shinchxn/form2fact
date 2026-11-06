@@ -1,0 +1,12 @@
+FORM2FACT
+Evidence-First Institutional Document Intelligence & Regulatory Cross-Verification Platform
+
+Project Repository: https://github.com/shinchxn/form2fact.git
+Domain: Regulatory Compliance, Document Scrutiny, and Cross-Verification (AICTE Specification)
+System Architecture: Hybrid Deterministic Regulatory Rules Engine + Calibrated Pairwise NLP Classifier
+Operational Model: Zero Autonomous Decision Invariant — All Non-Trivial Discrepancies Routed to Human Reviewers
+Technology Stack: Node.js (v24), TypeScript, React (v19), Vite, Express, Python (FastAPI/PyTorch), SQLite
+Platform Purpose: Automated cross-referencing of institutional approval claims against legally binding evidentiary documents.
+Verification Status: Fully Integrated and Verified
+Release Version: 1.2.0
+Build Timestamp: 2026-11-06

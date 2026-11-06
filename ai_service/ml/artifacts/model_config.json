@@ -1,0 +1,18 @@
+{
+  "model_version": "form2fact-hybrid-pairwise-v2.0-ml",
+  "embedding_backbone": "sentence-transformers/all-MiniLM-L6-v2",
+  "dense_dim": 1536,
+  "tabular_dim": 8,
+  "total_feature_dim": 1544,
+  "classes": [
+    "MATCH",
+    "MISMATCH",
+    "MISSING",
+    "UNCERTAIN",
+    "NOT_COMPARABLE"
+  ],
+  "validation_accuracy": 0.6,
+  "validation_macro_f1": 0.4857,
+  "test_accuracy": 0.6154,
+  "test_macro_f1": 0.5884
+}

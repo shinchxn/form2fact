@@ -8,6 +8,8 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Application } from '../types/index.ts';
+import { StatusBadge } from '../shared/components/StatusBadge.tsx';
+import { EmptyState } from '../shared/components/EmptyState.tsx';
 
 interface ApplicationsViewProps {
   applications: Application[];
@@ -222,21 +224,19 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
             <tbody className="divide-y divide-[#E2E8F0] text-sm">
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-[#64748B]">
-                    <div className="max-w-xs mx-auto space-y-2">
-                      <p className="font-semibold text-[#0F172A]">No matching applications</p>
-                      <button
-                        type="button"
-                        onClick={() => {
+                  <td colSpan={9} className="py-8 px-4">
+                    <EmptyState
+                      title="No applications match your filter"
+                      description="No institutional dockets match the specified status, category, or search keywords."
+                      action={{
+                        label: 'Reset Filters',
+                        onClick: () => {
                           setSearchTerm('');
                           setStatusFilter('all');
                           setCategoryFilter('all');
-                        }}
-                        className="px-3.5 py-2 bg-[#F1F5F9] rounded-md hover:bg-[#E2E8F0] text-xs font-medium text-[#0F172A]"
-                      >
-                        Reset filters
-                      </button>
-                    </div>
+                        }
+                      }}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -295,17 +295,7 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                     </td>
 
                     <td className="py-4 px-5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 text-xs font-medium rounded border ${
-                          app.reviewStatus === 'Review Completed'
-                            ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                            : app.reviewStatus === 'Discrepancies Confirmed'
-                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                            : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
-                        }`}
-                      >
-                        {app.reviewStatus}
-                      </span>
+                      <StatusBadge status={app.reviewStatus} size="sm" />
                     </td>
 
                     <td className="py-4 px-5 text-right whitespace-nowrap">

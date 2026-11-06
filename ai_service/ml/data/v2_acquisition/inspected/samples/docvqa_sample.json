@@ -1,0 +1,72 @@
+[
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "78282e984cac0f5ff43f26347ebc6d84fcd6ec20c8d777bdbc0e3983c7b163f2",
+    "query": "What is the date mentioned in this letter?\nOffer a terse response.",
+    "answer": "1/8/93.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "78282e984cac0f5ff43f26347ebc6d84fcd6ec20c8d777bdbc0e3983c7b163f2",
+    "query": "What is the contact person name mentioned in letter?\nOffer a terse response.",
+    "answer": "P. carter.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "22ff4079ee3cb77e95b1a586d2a3c223cd575449d6f44972b1e63ccde15767c1",
+    "query": "Which corporation's letterhead is this?\nYour answer should be very brief.",
+    "answer": "Brown & Williamson Tobacco Corporation.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "22ff4079ee3cb77e95b1a586d2a3c223cd575449d6f44972b1e63ccde15767c1",
+    "query": "Who is in  cc in this letter?\nYour response must be concise.",
+    "answer": "T.F. Riehl.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "22ff4079ee3cb77e95b1a586d2a3c223cd575449d6f44972b1e63ccde15767c1",
+    "query": "What is the subject of  this letter?\nOffer a very short reply.",
+    "answer": "Review of existing Brainstorming Ideas/483.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "22ff4079ee3cb77e95b1a586d2a3c223cd575449d6f44972b1e63ccde15767c1",
+    "query": "What is the number at the bottom of the page, in bold?\nYour answer should be very brief.",
+    "answer": "499150498.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "22ff4079ee3cb77e95b1a586d2a3c223cd575449d6f44972b1e63ccde15767c1",
+    "query": "What is written below the logo which looks like three leaves?\nGive a very brief answer.",
+    "answer": "B&W.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "55afe257a5e4467fc2574cec8e8d8c29545d85d6798495bde20ae1ea10b54528",
+    "query": "How many points are there in modifications to readout instrumentation\nYour response must be concise.",
+    "answer": "5.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "452707b2bc83ade227074d317b771635eef1f292f2a0e819cb5a833d75de2937",
+    "query": "What is the date in the letter\nEnsure brevity in your answer. ",
+    "answer": "June 11,1990.",
+    "source": "docvqa"
+  },
+  {
+    "image": "[IMAGE_BINARY_DATA]",
+    "image_filename": "452707b2bc83ade227074d317b771635eef1f292f2a0e819cb5a833d75de2937",
+    "query": "To whom this is addressed\nYour response must be concise.",
+    "answer": "Dr.K.S.Houghton.",
+    "source": "docvqa"
+  }
+]

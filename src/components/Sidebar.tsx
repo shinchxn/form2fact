@@ -8,7 +8,9 @@ import {
   FileSpreadsheet,
   History,
   Settings,
-  Layers
+  ShieldCheck,
+  BookOpen,
+  LogOut
 } from 'lucide-react';
 import { User } from '../types/index.ts';
 
@@ -16,8 +18,10 @@ export type ViewType =
   | 'overview'
   | 'applications'
   | 'document-review'
+  | 'verification'
   | 'findings'
   | 'rules'
+  | 'aicte-preview'
   | 'reports'
   | 'audit'
   | 'settings';
@@ -27,18 +31,21 @@ interface SidebarProps {
   onNavigate: (view: ViewType) => void;
   currentUser: User;
   openFindingsCount: number;
+  onSignOut?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onNavigate,
   currentUser,
-  openFindingsCount
+  openFindingsCount,
+  onSignOut
 }) => {
   const primaryNav = [
     { id: 'overview' as ViewType, label: 'Overview', icon: LayoutDashboard },
     { id: 'applications' as ViewType, label: 'Applications', icon: FolderOpen },
     { id: 'document-review' as ViewType, label: 'Evidence Viewer', icon: FileSearch },
+    { id: 'verification' as ViewType, label: 'Pairwise Verification', icon: Scale },
     {
       id: 'findings' as ViewType,
       label: 'Findings',
@@ -49,7 +56,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const governanceNav = [
-    { id: 'rules' as ViewType, label: 'Rules Engine', icon: Scale },
+    { id: 'aicte-preview' as ViewType, label: 'AICTE Preview', icon: ShieldCheck },
+    { id: 'rules' as ViewType, label: 'Rules Engine', icon: BookOpen },
     { id: 'audit' as ViewType, label: 'Audit Ledger', icon: History },
     { id: 'settings' as ViewType, label: 'System Settings', icon: Settings },
   ];
@@ -68,23 +76,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         type="button"
         aria-current={isActive ? 'page' : undefined}
         onClick={() => onNavigate(item.id)}
-        className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 text-sm rounded-md transition-colors text-left ${
+        className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 text-xs rounded-md transition-colors text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-[#0D9488] ${
           isActive
-            ? 'bg-[#F8FAFC] text-[#0F172A] font-semibold'
-            : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]/70 font-medium'
+            ? 'bg-[#F0FDFA] text-[#0A2540] font-semibold border-r-2 border-[#0D9488]'
+            : 'text-[#475569] hover:text-[#0A2540] hover:bg-[#F8FAFC] font-medium'
         }`}
       >
-        {isActive && (
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] bg-[#4F46E5] rounded-r"
-          />
-        )}
         <div className="flex items-center gap-3 truncate">
           <Icon
             aria-hidden="true"
             className={`w-4 h-4 shrink-0 transition-colors ${
-              isActive ? 'text-[#4F46E5]' : 'text-[#64748B] group-hover:text-[#0F172A]'
+              isActive ? 'text-[#0D9488]' : 'text-[#64748B] group-hover:text-[#0A2540]'
             }`}
           />
           <span className="truncate">{item.label}</span>
@@ -92,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {item.badge !== undefined && (
           <span
             aria-label={`${item.badge} open findings`}
-            className="text-xs font-mono tabular-nums px-2 py-0.5 bg-[#FFF1F2] text-[#9F1239] border border-[#FECDD3] rounded font-semibold"
+            className="text-[11px] font-mono tabular-nums px-2 py-0.5 bg-[#FFF1F2] text-[#9F1239] border border-[#FECDD3] rounded font-semibold"
           >
             {item.badge}
           </span>
@@ -111,17 +113,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="w-64 bg-[#FFFFFF] border-r border-[#E2E8F0] flex flex-col justify-between shrink-0 select-none">
       <div>
-        {/* Brand Header */}
-        <div className="h-16 px-5 border-b border-[#E2E8F0] flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#4F46E5] text-white rounded-md flex items-center justify-center shadow-2xs">
-            <Layers className="w-4 h-4" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-base font-semibold text-[#0F172A] tracking-tight">
-              Form2Fact
-            </span>
-            <span className="text-xs font-mono text-[#64748B] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
-              v1.2
+        {/* Authoritative Brand Header */}
+        <div className="h-20 px-4 border-b border-[#E2E8F0] flex items-center gap-3 bg-[#FFFFFF]">
+          <img
+            src="/form2fact-logo.jpg"
+            alt="Form2Fact Emblem"
+            className="h-11 w-auto object-contain rounded shrink-0 shadow-2xs"
+          />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold text-[#0A2540] tracking-tight">
+                Form<span className="text-[#0D9488]">2Fact</span>
+              </span>
+              <span className="text-[10px] font-mono font-semibold text-[#0D9488] bg-[#F0FDFA] px-1.5 py-0.5 rounded border border-[#99F6E4]">
+                v2.0
+              </span>
+            </div>
+            <span className="text-[11px] text-[#64748B] leading-tight truncate">
+              Institutional Intelligence
             </span>
           </div>
         </div>
@@ -129,34 +138,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation Sections */}
         <nav aria-label="Primary navigation" className="p-4 space-y-6">
           <div className="space-y-1">
-            <div className="px-3.5 pb-1.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">
+            <div className="px-3.5 pb-1.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">
               Workspace
             </div>
             {primaryNav.map(renderNavItem)}
           </div>
 
           <div className="space-y-1">
-            <div className="px-3.5 pb-1.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">
-              Governance
+            <div className="px-3.5 pb-1.5 text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">
+              Governance & Rules
             </div>
             {governanceNav.map(renderNavItem)}
           </div>
         </nav>
       </div>
 
-      {/* Pinned Session Footer */}
-      <div className="px-5 py-4 border-t border-[#E2E8F0] flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] flex items-center justify-center text-xs font-semibold shrink-0">
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-[#0F172A] truncate">
-            {currentUser.displayName}
+      {/* Pinned Session Footer with Persona & Sign-Out */}
+      <div className="p-4 border-t border-[#E2E8F0] bg-[#FAFAFA] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-[#F0FDFA] text-[#0D9488] border border-[#99F6E4] flex items-center justify-center text-xs font-bold shrink-0">
+            {initials}
           </div>
-          <div className="text-xs text-[#64748B] truncate">
-            {currentUser.role}
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-[#0A2540] truncate" title={currentUser.displayName}>
+              {currentUser.displayName}
+            </div>
+            <div className="text-[11px] text-[#64748B] truncate">
+              {currentUser.role}
+            </div>
           </div>
         </div>
+
+        {onSignOut && (
+          <button
+            type="button"
+            onClick={onSignOut}
+            title="Sign out of scrutiny session"
+            className="p-1.5 text-[#64748B] hover:text-[#9F1239] hover:bg-[#FFF1F2] rounded transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </aside>
   );

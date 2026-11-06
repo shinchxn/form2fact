@@ -1,0 +1,138 @@
+name: form2fact
+
+services:
+  # =========================================================================
+  # 1. Core Scrutiny API & React Single-Page Application (Full-Stack)
+  # =========================================================================
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: form2fact-api-server
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-fallback_dev_secret_must_be_32_chars_long_min}
+      - DATABASE_PATH=/app/data/form2fact.db
+      - DOCUMENT_STORAGE_PATH=/app/data/dockets
+      - AI_SERVICE_URL=http://ai-service:8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_data:/app/data
+    networks:
+      - form2fact-net
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =========================================================================
+  # 2. Python Document Intelligence & Pairwise Classification Microservice
+  # =========================================================================
+  ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: form2fact-ai-service
+    restart: unless-stopped
+    # Internal only by default; map to localhost only if host debugging is explicitly required
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+    environment:
+      - PORT=8000
+      - WORKERS=2
+      - MODEL_PATH=/app/models
+      - MODEL_VERSION=${MODEL_VERSION:-v1.0.0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_models:/app/models
+    networks:
+      - form2fact-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =========================================================================
+  # 3. Optional Enterprise Infrastructure (Enable via: docker compose --profile enterprise up)
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: form2fact-postgres
+    profiles: ["enterprise"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-form2fact_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-form2fact_secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-form2fact_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - form2fact-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U form2fact_admin -d form2fact_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: form2fact-redis
+    profiles: ["enterprise"]
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - form2fact-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: form2fact-minio
+    profiles: ["enterprise"]
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-form2fact_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-form2fact_minio_secret_key_2026}
+    volumes:
+      - minio_data:/data
+    networks:
+      - form2fact-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  form2fact_data:
+    name: form2fact_data
+  form2fact_models:
+    name: form2fact_models
+  postgres_data:
+    name: form2fact_postgres_data
+  redis_data:
+    name: form2fact_redis_data
+  minio_data:
+    name: form2fact_minio_data
+
+networks:
+  form2fact-net:
+    name: form2fact-network
+    driver: bridge

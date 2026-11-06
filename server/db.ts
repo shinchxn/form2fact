@@ -208,11 +208,19 @@ export class ScrutinyDatabase {
   }
 
   seedDefaultData(forceReset = false) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const seedDemoDisabled = process.env.SEED_DEMO_DATA === 'false';
     const existingAppsCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM applications').get() as any)?.count || 0);
-    const existingUser4 = this.db.prepare("SELECT id FROM users WHERE id = 'usr-004'").get();
+    const existingRulesCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM rules').get() as any)?.count || 0);
+    const existingUsersCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0);
 
-    if (existingAppsCount > 0 && existingUser4 && !forceReset) {
-      return;
+    if (!forceReset) {
+      if (isProduction && existingRulesCount > 0 && existingUsersCount > 0) {
+        return;
+      }
+      if (!isProduction && existingAppsCount > 0 && existingUsersCount > 0) {
+        return;
+      }
     }
 
     // Clear all existing data inside transaction
@@ -301,7 +309,12 @@ export class ScrutinyDatabase {
       );
     }
 
-    // 3. Seed Demo Applications
+    // 3. Seed Demo Applications (strictly disabled in production or when SEED_DEMO_DATA=false)
+    if (isProduction || seedDemoDisabled) {
+      console.log('[INFO] Production or clean data mode active: skipping demo application fixtures.');
+      return;
+    }
+
     // App 1: Compliant
     const app1Id = 'app-1104';
     const app1: Application = {
@@ -798,7 +811,16 @@ export class ScrutinyDatabase {
         leaseExpiryDate: data.declaredDetails?.leaseExpiryDate || '2050-03-31',
         sanctionedIntake: data.declaredDetails?.sanctionedIntake || 300,
         previousApprovalRef: data.declaredDetails?.previousApprovalRef || '',
-        applicationYear: data.declaredDetails?.applicationYear || '2026-27'
+        applicationYear: data.declaredDetails?.applicationYear || '2026-27',
+
+        // Optional AICTE regulatory context
+        leaseArrangement: data.declaredDetails?.leaseArrangement,
+        applicableHandbookVersion: data.declaredDetails?.applicableHandbookVersion,
+        councilNotificationDate: data.declaredDetails?.councilNotificationDate,
+        lessorType: data.declaredDetails?.lessorType,
+        isSubLease: data.declaredDetails?.isSubLease,
+        subLeaseAssignmentRight: data.declaredDetails?.subLeaseAssignmentRight,
+        mortgageRegistered: data.declaredDetails?.mortgageRegistered
       },
       documentCount: 0,
       openFindingsCount: 0,
@@ -857,35 +879,62 @@ export class ScrutinyDatabase {
    * Deletes a document, cascades its extracted fields, and re-evaluates all application rules.
    */
   removeDocument(documentId: string, actor?: User): boolean {
-    const doc = this.getDocumentById(documentId);
-    if (!doc) return false;
+    this.db.exec('BEGIN IMMEDIATE');
 
-    const effectiveActor = actor || this.currentUser;
-    const appId = doc.applicationId;
+    try {
+      const doc = this.getDocumentById(documentId);
+      if (!doc) {
+        this.db.exec('ROLLBACK');
+        return false;
+      }
 
-    // Delete fields and document
-    this.db.prepare('DELETE FROM extracted_fields WHERE documentId = ?').run(documentId);
-    this.db.prepare('DELETE FROM documents WHERE id = ?').run(documentId);
+      const effectiveActor = actor || this.currentUser;
+      const appId = doc.applicationId;
 
-    // Update application count
-    const docCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM documents WHERE applicationId = ?').get(appId) as any)?.c || 0);
-    this.db.prepare('UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?').run(docCount, new Date().toISOString(), appId);
+      // Delete extracted fields and document
+      this.db.prepare(
+        'DELETE FROM extracted_fields WHERE documentId = ?'
+      ).run(documentId);
 
-    this.recordAudit({
-      actorId: effectiveActor.id,
-      actorName: effectiveActor.displayName,
-      action: 'Document Removed',
-      entityType: 'Document',
-      entityReference: doc.originalFilename,
-      note: `Document detached from application docket. Re-evaluating validation checks.`
-    });
+      this.db.prepare(
+        'DELETE FROM documents WHERE id = ?'
+      ).run(documentId);
 
-    // Re-run validation immediately so missing requirements (RULE-DOC-04) trigger and stale findings clear
-    this.runValidation(appId, effectiveActor);
+      // Update application document count
+      const docCount = Number(
+        (this.db.prepare(
+          'SELECT COUNT(*) as c FROM documents WHERE applicationId = ?'
+        ).get(appId) as any)?.c || 0
+      );
 
-    return true;
+      this.db.prepare(
+        'UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?'
+      ).run(docCount, new Date().toISOString(), appId);
+
+      // Record deletion audit event
+      this.recordAudit({
+        actorId: effectiveActor.id,
+        actorName: effectiveActor.displayName,
+        action: 'Document Removed',
+        entityType: 'Document',
+        entityReference: doc.originalFilename,
+        note: 'Document detached from application docket. Re-evaluating validation checks.'
+      });
+
+      // Re-run validation within the same transaction
+      this.runValidation(appId, effectiveActor);
+
+      this.db.exec('COMMIT');
+      return true;
+        } catch (error) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        // Preserve the original database error.
+      }
+      throw error;
+    }
   }
-
   getFieldsByDocument(documentId: string): ExtractedField[] {
     const rows = this.db.prepare('SELECT * FROM extracted_fields WHERE documentId = ?').all(documentId) as any[];
     return rows.map(r => this.mapFieldRow(r));

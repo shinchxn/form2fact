@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "form2fact-pairwise-mismatch-models",
+  "description": "Versioned ML model artifact manifest for Form2Fact document intelligence",
+  "default_version": "v1.0.0",
+  "active_version": "v1.0.0",
+  "versions": {
+    "v1.0.0": {
+      "version": "v1.0.0",
+      "model_id": "form2fact-pairwise-hybrid-v1.0.0",
+      "release_date": "2026-11-06",
+      "architecture": "HybridDeterministicSemanticClassifier",
+      "taxonomy": [
+        "MATCH",
+        "MISMATCH",
+        "MISSING",
+        "UNCERTAIN",
+        "NOT_COMPARABLE"
+      ],
+      "files": {
+        "metadata": "versions/v1.0.0/metadata.json",
+        "config": "versions/v1.0.0/config.json"
+      },
+      "checksums": {
+        "metadata.json": "e1d5ba0bd13e6eae5916aeda1d2689e86a2588c24f2cb13e54791558119c6ac8",
+        "config.json": "a44f165eb47dd03c290c1162dcd9df2c01474495ee7c8aefb2dfcb91a2055f7a"
+      },
+      "evaluation_baseline": {
+        "accuracy": 0.75,
+        "sample_count": 8,
+        "abstention_rate": 0.125
+      },
+      "status": "ready"
+    }
+  }
+}

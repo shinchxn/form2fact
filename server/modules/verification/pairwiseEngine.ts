@@ -272,7 +272,64 @@ export class PairwiseFieldClassifier {
       };
     }
 
-    // 9. Address and General Textual Comparison
+    // 8.5 Optional Call to Real Python FastAPI ML Microservice when available
+    const mlServiceUrl = process.env.AI_SERVICE_URL || process.env.ML_SERVICE_URL;
+    if (mlServiceUrl) {
+      try {
+        const mlRes = await fetch(`${mlServiceUrl.replace(/\/+$/, '')}/api/v1/classify-pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            domain_id: input.domainId || 'aicte',
+            relationship_id: input.relationshipId,
+            claim_field: {
+              field_id: claim.fieldId,
+              document_id: claim.documentId,
+              document_name: claim.documentName,
+              field_name: claim.fieldName,
+              field_label: claim.fieldLabel,
+              raw_value: claim.rawValue,
+              normalized_value: normClaim,
+              page_number: claim.pageNumber,
+              source_text: claim.sourceText
+            },
+            evidence_field: {
+              field_id: evidence.fieldId,
+              document_id: evidence.documentId,
+              document_name: evidence.documentName,
+              field_name: evidence.fieldName,
+              field_label: evidence.fieldLabel,
+              raw_value: evidence.rawValue,
+              normalized_value: normEvidence,
+              page_number: evidence.pageNumber,
+              source_text: evidence.sourceText
+            },
+            comparison_type: input.comparisonType || 'generic',
+            confidence_threshold: confidenceThreshold
+          }),
+          signal: AbortSignal.timeout(3000)
+        });
+
+        if (mlRes.ok) {
+          const mlData = await mlRes.json() as any;
+          return {
+            label: mlData.label as PairwiseLabel,
+            confidence: mlData.confidence,
+            isDeterministic: false,
+            explanation: mlData.explanation || `ML inference result with ${(mlData.confidence * 100).toFixed(0)}% confidence.`,
+            normalizedClaimValue: normClaim,
+            normalizedEvidenceValue: normEvidence,
+            evidenceList: evidenceItems,
+            requiresHumanReview: mlData.requires_human_review ?? (mlData.confidence < 0.60),
+            modelVersion: mlData.model_version || 'form2fact-hybrid-pairwise-v2.0-champion'
+          };
+        }
+      } catch (err: any) {
+        logger.debug('ML microservice unavailable; falling back to deterministic screening', { error: err.message });
+      }
+    }
+
+    // 9. Address and General Textual Comparison (Deterministic Fallback)
     const tokenOverlap = this.calculateTokenOverlap(normClaim, normEvidence);
 
     // High lexical concordance (>= 0.85) -> MATCH
@@ -280,13 +337,13 @@ export class PairwiseFieldClassifier {
       return {
         label: 'MATCH',
         confidence: Number(tokenOverlap.toFixed(2)),
-        isDeterministic: false,
-        explanation: `Textual concordance verified (${(tokenOverlap * 100).toFixed(0)}% token overlap).`,
+        isDeterministic: true,
+        explanation: `Textual concordance verified via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% token overlap).`,
         normalizedClaimValue: normClaim,
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: tokenOverlap < confidenceThreshold,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: 'form2fact-deterministic-screening-v1.0'
       };
     }
 
@@ -317,13 +374,13 @@ export class PairwiseFieldClassifier {
     return {
       label: 'UNCERTAIN',
       confidence: Number(Math.max(0.20, tokenOverlap).toFixed(2)),
-      isDeterministic: false,
-      explanation: `Textual variation detected (${(tokenOverlap * 100).toFixed(0)}% lexical overlap). Information formatting or terminology diverges without verified statutory contradiction; referred for human reviewer verification.`,
+      isDeterministic: true,
+      explanation: `Textual variation detected via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% lexical overlap). Information formatting or terminology diverges without verified statutory contradiction; referred for human reviewer verification.`,
       normalizedClaimValue: normClaim,
       normalizedEvidenceValue: normEvidence,
       evidenceList: evidenceItems,
       requiresHumanReview: true,
-      modelVersion: this.MODEL_VERSION
+      modelVersion: 'form2fact-deterministic-screening-v1.0'
     };
   }
 

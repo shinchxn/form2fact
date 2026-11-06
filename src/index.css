@@ -17,31 +17,45 @@
 
 @layer base {
   :root {
-    /* Modern SaaS Design System Tokens (Linear / Stripe / Vercel aesthetic) */
+    /* Form2Fact Enterprise Design System Tokens (Official Deep Navy & Verifiable Evidence Teal) */
     --bg-canvas: #F8FAFC;
     --surface-card: #FFFFFF;
     --surface-subtle: #F1F5F9;
     --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --text-muted: #94A3B8;
-    --brand-primary: #4F46E5;
-    --brand-hover: #4338CA;
-    --brand-tint: #EEF2FF;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+    --brand-navy: #0A2540;
+    --brand-navy-dark: #071A2E;
+    --brand-teal: #0D9488;
+    --brand-teal-hover: #0F766E;
+    --brand-teal-tint: #F0FDFA;
+    --brand-primary: #0A2540;
+    --brand-accent: #0D9488;
+    --brand-hover: #071A2E;
+    --brand-tint: #F0FDFA;
     --border-crisp: #E2E8F0;
     --border-subtle: #F1F5F9;
 
-    /* Status Semantic Tokens */
+    /* 5-Class Regulatory Status Semantic Tokens */
     --status-emerald-bg: #ECFDF5;
     --status-emerald-text: #065F46;
     --status-emerald-border: #A7F3D0;
+
+    --status-rose-bg: #FFF1F2;
+    --status-rose-text: #9F1239;
+    --status-rose-border: #FECDD3;
 
     --status-amber-bg: #FFFBEB;
     --status-amber-text: #92400E;
     --status-amber-border: #FDE68A;
 
-    --status-rose-bg: #FFF1F2;
-    --status-rose-text: #9F1239;
-    --status-rose-border: #FECDD3;
+    --status-orange-bg: #FFF7ED;
+    --status-orange-text: #C2410C;
+    --status-orange-border: #FED7AA;
+
+    --status-slate-bg: #F8FAFC;
+    --status-slate-text: #475569;
+    --status-slate-border: #CBD5E1;
 
     /* Typography Scale & Stack */
     --font-family-primary: 'Inter';
@@ -74,7 +88,7 @@
 
   /* WCAG 2.2 AA Focus-Visible Enforcement */
   *:focus-visible {
-    outline: 2px solid var(--brand-primary);
+    outline: 2px solid var(--brand-accent);
     outline-offset: 2px;
   }
 

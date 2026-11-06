@@ -7,6 +7,7 @@ import { ApplicationDetailView } from './components/ApplicationDetailView.tsx';
 import { DocumentReviewView } from './components/DocumentReviewView.tsx';
 import { FindingsView } from './components/FindingsView.tsx';
 import { RulesView } from './components/RulesView.tsx';
+import { AictePreviewView } from './components/AictePreviewView.tsx';
 import { ReportsView } from './components/ReportsView.tsx';
 import { AuditLogView } from './components/AuditLogView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
@@ -14,6 +15,9 @@ import { NewApplicationModal } from './components/NewApplicationModal.tsx';
 import { CorrectionModal } from './components/CorrectionModal.tsx';
 import { ReviewActionModal } from './components/ReviewActionModal.tsx';
 import { ErrorBoundary } from './shared/components/ErrorBoundary.tsx';
+import { LoadingState } from './shared/components/LoadingState.tsx';
+import { PairwiseComparator } from './features/verification/PairwiseComparator.tsx';
+import { AlertCircle, RotateCw } from 'lucide-react';
 
 import {
   Application,
@@ -33,10 +37,14 @@ import {
   fetchRules,
   fetchCurrentUser,
   resetDemoData,
-  ensureAuthToken
+  ensureAuthToken,
+  getAuthToken,
+  logout
 } from './services/api.ts';
+import { LoginView } from './components/LoginView.tsx';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!getAuthToken());
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -65,6 +73,7 @@ export default function App() {
   const [reviewFinding, setReviewFinding] = useState<Finding | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
@@ -77,8 +86,15 @@ export default function App() {
 
   // Load initial global data
   const loadGlobalData = async () => {
+    setIsLoading(true);
+    setApiError(null);
     try {
-      await ensureAuthToken();
+      const token = getAuthToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
       const [appsData, findingsData, auditsData, rulesData, userData] = await Promise.all([
         fetchApplications(),
         fetchFindings(),
@@ -90,18 +106,50 @@ export default function App() {
       setAllFindings(findingsData);
       setAuditEvents(auditsData);
       setRules(rulesData);
-      if (userData) setCurrentUser(userData);
+      if (userData) {
+        setCurrentUser(userData);
+        setIsAuthenticated(true);
+      }
 
       // Preload default application context for Evidence Viewer / Dossiers without locking the Applications list view
       if (!selectedApplication && appsData.length > 0) {
         const mismatchApp = appsData.find((a) => a.referenceNumber.includes('0842')) || appsData[0];
         await loadApplicationDetails(mismatchApp.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load initial data:', err);
+      const isAuthError = err.message && (
+        err.message.includes('401') ||
+        err.message.includes('Authentication') ||
+        err.message.includes('jwt expired') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('Invalid or expired') ||
+        err.message.includes('session token') ||
+        err.message.includes('INVALID_TOKEN') ||
+        err.message.includes('ROLE_REVOKED')
+      );
+      if (isAuthError) {
+        logout();
+        setIsAuthenticated(false);
+      } else {
+        setApiError(err.message || 'Failed to connect to Form2Fact Scrutiny API.');
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLoginSuccess = async (user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    await loadGlobalData();
+  };
+
+  const handleSignOut = () => {
+    logout();
+    setIsAuthenticated(false);
+    setSelectedApplication(null);
+    setIsInspectingApplication(false);
   };
 
   const loadApplicationDetails = async (id: string) => {
@@ -173,6 +221,10 @@ export default function App() {
     (f) => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine'
   ).length;
 
+  if (!isAuthenticated) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="flex h-screen bg-[#F8FAFC] text-[#0F172A] overflow-hidden font-sans">
       {/* Modern SaaS Left Sidebar */}
@@ -181,6 +233,7 @@ export default function App() {
         onNavigate={handleNavigate}
         currentUser={currentUser}
         openFindingsCount={openFindingsCount}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Content Viewport */}
@@ -189,6 +242,7 @@ export default function App() {
         <Header
           currentView={currentView}
           selectedApplication={isInspectingApplication ? selectedApplication : null}
+          currentUser={currentUser}
           onNavigate={handleNavigate}
           onOpenIntake={() => setIsIntakeOpen(true)}
           onResetDemo={handleResetDemo}
@@ -200,10 +254,25 @@ export default function App() {
           ref={mainScrollRef}
           className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
         >
-          {isLoading ? (
-            <div className="p-16 text-center text-sm text-[#64748B]">
-              Loading workspace...
+          {apiError && (
+            <div className="m-6 p-4 bg-[#FFF1F2] border border-[#FECDD3] rounded-lg text-sm text-[#9F1239] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <span>{apiError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={loadGlobalData}
+                className="px-3.5 py-1.5 bg-[#9F1239] hover:bg-[#881337] text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Retry Connection</span>
+              </button>
             </div>
+          )}
+
+          {isLoading ? (
+            <LoadingState message="Loading institutional scrutiny workspace..." />
           ) : (
             <ErrorBoundary>
               {currentView === 'overview' && (
@@ -217,6 +286,20 @@ export default function App() {
                   onOpenIntake={() => setIsIntakeOpen(true)}
                   onOpenReviewAction={(finding) => setReviewFinding(finding)}
                 />
+              )}
+
+              {currentView === 'verification' && (
+                <div className="px-6 lg:px-8 py-8 pb-24 max-w-[1440px] mx-auto space-y-6 text-sm">
+                  <div>
+                    <h1 className="text-xl font-semibold text-[#0F172A] tracking-tight">
+                      Pairwise Field Verification & Taxonomy Workbench
+                    </h1>
+                    <p className="text-sm text-[#64748B] mt-1">
+                      Cross-verify applicant declared parameters against supporting documentary evidence using hybrid deterministic validation and abstention logic.
+                    </p>
+                  </div>
+                  <PairwiseComparator />
+                </div>
               )}
 
               {currentView === 'applications' && (
@@ -290,6 +373,14 @@ export default function App() {
                     const r = await fetchRules();
                     setRules(r);
                   }}
+                />
+              )}
+
+              {currentView === 'aicte-preview' && (
+                <AictePreviewView
+                  applications={applications}
+                  selectedApplication={selectedApplication}
+                  onSelectApplication={handleSelectApplication}
                 />
               )}
 

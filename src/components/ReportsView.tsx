@@ -169,7 +169,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       </div>
 
-      {loading || !report ? (
+      {applications.length === 0 ? (
+        <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-[#F0FDFA] text-[#0D9488] flex items-center justify-center mx-auto border border-[#99F6E4]">
+            <Printer className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-semibold text-[#0A2540]">No Institutional Dossiers Available</h3>
+          <p className="text-xs text-[#64748B] max-w-md mx-auto">
+            Zero applications are currently registered in this scrutiny docket. Register an application and upload supporting documents to generate verification dossiers.
+          </p>
+        </div>
+      ) : loading || !report ? (
         <div className="p-16 text-center text-[#64748B] text-sm">Loading verification dossier...</div>
       ) : (
         <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg p-8 lg:p-10 space-y-10 shadow-2xs text-sm print:border-none print:shadow-none print:p-0">

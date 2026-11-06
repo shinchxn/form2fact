@@ -1,0 +1,55 @@
+{
+  "total_records": 70,
+  "duplicates_removed": 0,
+  "validation_errors": 0,
+  "label_distribution": {
+    "MATCH": 29,
+    "MISMATCH": 24,
+    "MISSING": 6,
+    "UNCERTAIN": 8,
+    "NOT_COMPARABLE": 3
+  },
+  "domain_distribution": {
+    "aicte": 66,
+    "naac": 3,
+    "nba": 1
+  },
+  "field_type_distribution": {
+    "date": 12,
+    "numeric": 26,
+    "entity_name": 16,
+    "code": 4,
+    "generic": 9,
+    "not_comparable": 3
+  },
+  "data_origin_distribution": {
+    "synthetic": 70
+  },
+  "splits": {
+    "train": 47,
+    "validation": 10,
+    "test": 13
+  },
+  "split_label_distribution": {
+    "train": {
+      "MATCH": 20,
+      "MISSING": 4,
+      "MISMATCH": 16,
+      "NOT_COMPARABLE": 2,
+      "UNCERTAIN": 5
+    },
+    "validation": {
+      "MISMATCH": 3,
+      "MISSING": 1,
+      "MATCH": 4,
+      "UNCERTAIN": 1,
+      "NOT_COMPARABLE": 1
+    },
+    "test": {
+      "MATCH": 5,
+      "MISMATCH": 5,
+      "UNCERTAIN": 2,
+      "MISSING": 1
+    }
+  }
+}

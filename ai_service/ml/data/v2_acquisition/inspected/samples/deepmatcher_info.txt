@@ -1,0 +1,42 @@
+# Datasets for DeepMatcher paper
+
+Datasets listed in this page were used for the experimental study in [Deep Learning for Entity Matching](http://pages.cs.wisc.edu/~anhai/papers1/deepmatcher-sigmod18.pdf) published in SIGMOD 2018. Each data instance in each dataset is a labeled tuple pair, where each tuple pair comes from the 2 tables being matched, say table A and table B. We assume that both the tables being matched have the same schema.
+
+The table below summarizes all the datasets. Here's a brief description of some of the columns:
+- Size: Number of labeled tuple pairs in the dataset.
+- \# Pos.: Number of positive instances, i.e., tuple pairs marked as a match in the dataset.
+- \# Attr.: Number of attributes in the tables being matched (note that both tables have same schema)
+
+The "Browse" links point to the preprocessed versions of the datasets which were used for experiments. The "Download" links provide a compressed zip of the preprocessed data. The "Raw" links provide a compressed zip of the raw unprocessed data obtained from data source. The "Info" links point to the dataset details.
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Dataset</th>
+      <th>Domain</th>
+      <th>Size</th>
+      <th># Pos.</th>
+      <th># Attr.</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan=7> Structured</td>
+      <td>BeerAdvo-RateBeer</td>
+      <td>beer</td>
+      <td>450</td>
+      <td>68</td>
+      <td>4</td>
+      <td><a href="http://pages.cs.wisc.edu/~anhai/data1/deepmatcher_data/Structured/Beer/exp_data/">Browse</a> |
+      <a href="http://pages.cs.wisc.edu/~anhai/data1/deepmatcher_data/Structured/Beer/beer_exp_data.zip">Download</a> | 
+      <a href="http://pages.cs.wisc.edu/~anhai/data1/deepmatcher_data/Structured/Beer/beer_raw_data.zip">Raw</a> |
+      <a href="#beeradvo-ratebeer">Info</a></td>
+    </tr>
+    <tr>
+      <td>iTunes-Amazon<sub>1</sub></td>
+      <td>music</td>
+      <td>539</td>
+      <td>132</td>
+      <td>8</td

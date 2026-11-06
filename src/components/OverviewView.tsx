@@ -8,7 +8,11 @@ import {
   FileSearch,
   FileSpreadsheet,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  XCircle,
+  HelpCircle,
+  MinusCircle,
+  Scale
 } from 'lucide-react';
 import { Application, Finding, AuditEvent, Rule } from '../types/index.ts';
 import { ViewType } from './Sidebar.tsx';
@@ -47,6 +51,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const totalDocuments = applications.reduce((sum, a) => sum + (a.documentCount || 0), 0);
   const activeRulesCount = rules.filter((r) => r.enabled).length;
 
+  // Real 5-Class Pairwise Classification Metrics derived strictly from database findings and application records
+  const mismatchCount = findings.filter(
+    (f) => f.severity === 'Material Discrepancy' || f.status === 'Confirmed'
+  ).length;
+  const missingCount = findings.filter(
+    (f) => f.severity === 'Information Missing' || f.explanation.toLowerCase().includes('missing')
+  ).length;
+  const uncertainCount = findings.filter(
+    (f) => f.status === 'Unable to Determine' || f.explanation.toLowerCase().includes('ocr') || f.explanation.toLowerCase().includes('unreadable')
+  ).length;
+  const notComparableCount = findings.filter((f) => f.status === 'Dismissed').length;
+  const compliantAppsCount = applications.filter((a) => a.openFindingsCount === 0).length;
+
   const categories = [
     { name: 'Land & Tenancy', count: findings.filter((f) => f.category === 'Land & Tenancy').length },
     { name: 'Identity & Registration', count: findings.filter((f) => f.category === 'Identity & Registration').length },
@@ -56,7 +73,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   const topics = [
     { id: 'topic-kpis', label: '01 · Summary Metrics' },
-    { id: 'topic-scenarios', label: '02 · Verification Scenarios' },
+    { id: 'topic-scenarios', label: `02 · Active Scrutiny Dockets (${totalApps})` },
     { id: 'topic-applications', label: `03 · Applications (${totalApps})` },
     { id: 'topic-findings', label: `04 · Findings (${findings.length})` },
     { id: 'topic-rules', label: `05 · Active Rules (${activeRulesCount})` },
@@ -234,146 +251,178 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
           </button>
         </div>
+
+        {/* Five-Class Pairwise Classification Outcome Matrix */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 text-[#4F46E5]" />
+              <span>Pairwise Verification Taxonomy Breakdown</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('verification')}
+              className="text-xs font-semibold text-[#4F46E5] hover:underline inline-flex items-center gap-1"
+            >
+              <span>Launch Verification Workbench</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="p-3.5 bg-[#ECFDF5] border border-[#A7F3D0] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#065F46]">MATCH</span>
+                <CheckCircle2 className="w-4 h-4 text-[#065F46]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#065F46] my-1.5 tabular-nums">
+                {compliantAppsCount}
+              </div>
+              <div className="text-[11px] text-[#047857]">Compliant dockets</div>
+            </div>
+
+            <div className="p-3.5 bg-[#FFF1F2] border border-[#FECDD3] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#9F1239]">MISMATCH</span>
+                <XCircle className="w-4 h-4 text-[#9F1239]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#9F1239] my-1.5 tabular-nums">
+                {mismatchCount}
+              </div>
+              <div className="text-[11px] text-[#BE123C]">Contradictions found</div>
+            </div>
+
+            <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#92400E]">MISSING</span>
+                <AlertTriangle className="w-4 h-4 text-[#92400E]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#92400E] my-1.5 tabular-nums">
+                {missingCount}
+              </div>
+              <div className="text-[11px] text-[#B45309]">Omitted documents</div>
+            </div>
+
+            <div className="p-3.5 bg-[#FFF7ED] border border-[#FED7AA] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#C2410C]">UNCERTAIN</span>
+                <HelpCircle className="w-4 h-4 text-[#C2410C]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#C2410C] my-1.5 tabular-nums">
+                {uncertainCount}
+              </div>
+              <div className="text-[11px] text-[#9A3412]">Requires officer review</div>
+            </div>
+
+            <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#475569]">NOT COMPARABLE</span>
+                <MinusCircle className="w-4 h-4 text-[#64748B]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#334155] my-1.5 tabular-nums">
+                {notComparableCount}
+              </div>
+              <div className="text-[11px] text-[#64748B]">Incompatible dimensions</div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <hr className="border-[#E2E8F0]" />
 
-      {/* TOPIC 02: Benchmark Verification Scenarios */}
+      {/* TOPIC 02: Active Scrutiny Dockets */}
       <section id="topic-scenarios" className="scroll-mt-20 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
-            <span className="text-xs font-mono uppercase tracking-wider text-[#4F46E5] font-semibold">
+            <span className="text-xs font-mono uppercase tracking-wider text-[#0D9488] font-semibold">
               Topic 02
             </span>
-            <h2 className="text-lg font-semibold text-[#0F172A]">
-              Verification Scenarios
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Active Scrutiny Dockets
             </h2>
-            <p className="text-sm text-[#64748B] mt-0.5">
-              Three pre-configured institutional dockets demonstrating compliant, mismatched, and missing-evidence workflows.
+            <p className="text-xs text-[#64748B] mt-0.5">
+              Live institutional filings undergoing cross-document verification, pairwise classification, and human review.
             </p>
           </div>
           <button
             type="button"
             onClick={() => onNavigate('applications')}
-            className="px-3.5 py-2 text-xs font-semibold text-[#4F46E5] bg-[#EEF2FF] hover:bg-[#E0E7FF] rounded-md transition-colors inline-flex items-center gap-1.5 shrink-0"
+            className="px-3.5 py-2 text-xs font-semibold text-[#0D9488] bg-[#F0FDFA] hover:bg-[#CCFBF1] rounded-md transition-colors inline-flex items-center gap-1.5 shrink-0 border border-[#99F6E4]"
           >
-            <span>View All Applications</span>
+            <span>View All Applications ({totalApps})</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
-          {/* Scenario 1 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-EOA-1104
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded text-xs font-medium">
-                  Compliant
-                </span>
-              </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Kalyani Institute of Engineering
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                30-year registered lease deed aligns with declared 2054 expiry date and 7.50 Acres across all 4 statutory documents.
-              </p>
+        {applications.length === 0 ? (
+          <div className="p-8 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-[#F0FDFA] text-[#0D9488] flex items-center justify-center mx-auto border border-[#99F6E4]">
+              <FolderOpen className="w-6 h-6" />
             </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#065F46] font-semibold">
-                0 Open Findings
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('1104'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
-              >
-                <span>Inspect Docket</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <h3 className="text-base font-semibold text-[#0A2540]">
+              No Institutional Dockets Registered
+            </h3>
+            <p className="text-xs text-[#64748B] max-w-md mx-auto leading-relaxed">
+              The regional scrutiny database contains zero institutional applications. Ingest a new application docket to begin automated OCR extraction, statutory rules verification, and pairwise mismatch classification.
+            </p>
+            <button
+              type="button"
+              onClick={onOpenIntake}
+              className="mt-2 px-4 py-2 text-xs font-semibold text-white bg-[#0A2540] hover:bg-[#071A2E] rounded-md transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#0D9488]" />
+              <span>Register New Application</span>
+            </button>
           </div>
-
-          {/* Scenario 2 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-NTC-0842
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#FFF1F2] text-[#9F1239] border border-[#FECDD3] rounded text-xs font-medium">
-                  2 Discrepancies
-                </span>
-              </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Pragati Institute of Technology
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                Declared 2048 lease expiry conflicts with 2028 deed termination clause (page 3); campus land short by 2.30 Acres (page 4).
-              </p>
-            </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#E11D48] font-semibold">
-                2 Open Findings
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('0842'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+            {applications.slice(0, 3).map((app) => (
+              <div
+                key={app.id}
+                className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] hover:border-[#0D9488] rounded-lg flex flex-col justify-between gap-5 h-full transition-all shadow-2xs"
               >
-                <span>Inspect Discrepancies</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-semibold text-[#64748B]">
+                      {app.referenceNumber}
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded text-xs font-medium border ${
+                        app.openFindingsCount === 0
+                          ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                          : 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                      }`}
+                    >
+                      {app.openFindingsCount === 0
+                        ? 'Compliant'
+                        : `${app.openFindingsCount} Open Finding${app.openFindingsCount > 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-base text-[#0A2540]">
+                    {app.institutionName}
+                  </h3>
+                  <p className="text-[#64748B] text-xs leading-relaxed line-clamp-2">
+                    {app.declaredDetails?.address || `${app.applicationType} · ${app.declaredDetails?.landAreaAcres || 0} Acres declared.`}
+                  </p>
+                </div>
 
-          {/* Scenario 3 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-EOA-0915
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] rounded text-xs font-medium">
-                  Manual Review
-                </span>
+                <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                  <span className="font-mono tabular-nums text-[#64748B]">
+                    {app.documentCount} Document{app.documentCount !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSelectApplication(app)}
+                    className="font-semibold text-[#0D9488] hover:text-[#0F766E] inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Inspect Docket</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Vidyapeeth Academy of Pharmacy
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                Fire Safety NOC missing from submission; Building Safety Certificate is an unindexed bitmap scan requiring officer review.
-              </p>
-            </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#D97706] font-semibold">
-                2 Flagged Items
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('0915'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
-              >
-                <span>Inspect Docket</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            ))}
           </div>
-        </div>
+        )}
       </section>
 
       <hr className="border-[#E2E8F0]" />
@@ -418,72 +467,80 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0] text-sm">
-                {applications.slice(0, 5).map((app) => (
-                  <tr
-                    key={app.id}
-                    onClick={() => onSelectApplication(app)}
-                    className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
-                  >
-                    <td className="py-4 px-5 font-mono text-xs font-semibold text-[#0F172A] whitespace-nowrap truncate">
-                      {app.referenceNumber}
-                    </td>
-                    <td className="py-4 px-5">
-                      <div className="font-semibold text-[#0F172A] truncate">
-                        {app.institutionName}
-                      </div>
-                      <div className="text-xs text-[#64748B] truncate mt-0.5">
-                        {app.declaredDetails.address}
-                      </div>
-                    </td>
-                    <td className="py-4 px-5 text-xs text-[#64748B] whitespace-nowrap truncate">
-                      {app.applicationType}
-                    </td>
-                    <td className="py-4 px-5 text-right font-mono text-xs text-[#0F172A] whitespace-nowrap tabular-nums">
-                      <div className="font-semibold">{app.declaredDetails.landAreaAcres} Acres</div>
-                      <div className="text-[#64748B] mt-0.5">Exp: {app.declaredDetails.leaseExpiryDate}</div>
-                    </td>
-                    <td className="py-4 px-5 text-right font-mono text-xs tabular-nums font-medium text-[#0F172A]">
-                      {app.documentCount}
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      {app.openFindingsCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums font-medium text-[#9F1239] bg-[#FFF1F2] border border-[#FECDD3] px-2.5 py-0.5 rounded text-xs">
-                          {app.openFindingsCount} Open
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 rounded text-xs">
-                          0
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 text-xs font-medium rounded border ${
-                          app.reviewStatus === 'Review Completed'
-                            ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                            : app.reviewStatus === 'Discrepancies Confirmed'
-                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                            : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
-                        }`}
-                      >
-                        {app.reviewStatus}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectApplication(app);
-                        }}
-                        className="px-3 py-1.5 text-xs font-semibold text-[#4F46E5] hover:bg-[#EEF2FF] rounded-md transition-colors inline-flex items-center gap-1"
-                      >
-                        <span>Open</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                {applications.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-[#64748B]">
+                      No institutional applications registered in this queue. Ingest a new docket to initiate statutory review.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  applications.slice(0, 5).map((app) => (
+                    <tr
+                      key={app.id}
+                      onClick={() => onSelectApplication(app)}
+                      className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                    >
+                      <td className="py-4 px-5 font-mono text-xs font-semibold text-[#0F172A] whitespace-nowrap truncate">
+                        {app.referenceNumber}
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="font-semibold text-[#0F172A] truncate">
+                          {app.institutionName}
+                        </div>
+                        <div className="text-xs text-[#64748B] truncate mt-0.5">
+                          {app.declaredDetails.address}
+                        </div>
+                      </td>
+                      <td className="py-4 px-5 text-xs text-[#64748B] whitespace-nowrap truncate">
+                        {app.applicationType}
+                      </td>
+                      <td className="py-4 px-5 text-right font-mono text-xs text-[#0F172A] whitespace-nowrap tabular-nums">
+                        <div className="font-semibold">{app.declaredDetails.landAreaAcres} Acres</div>
+                        <div className="text-[#64748B] mt-0.5">Exp: {app.declaredDetails.leaseExpiryDate}</div>
+                      </td>
+                      <td className="py-4 px-5 text-right font-mono text-xs tabular-nums font-medium text-[#0F172A]">
+                        {app.documentCount}
+                      </td>
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
+                        {app.openFindingsCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums font-medium text-[#9F1239] bg-[#FFF1F2] border border-[#FECDD3] px-2.5 py-0.5 rounded text-xs">
+                            {app.openFindingsCount} Open
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 rounded text-xs">
+                            0
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-5 whitespace-nowrap">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 text-xs font-medium rounded border ${
+                            app.reviewStatus === 'Review Completed'
+                              ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                              : app.reviewStatus === 'Discrepancies Confirmed'
+                              ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                              : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
+                          }`}
+                        >
+                          {app.reviewStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectApplication(app);
+                          }}
+                          className="px-3 py-1.5 text-xs font-semibold text-[#0D9488] hover:bg-[#F0FDFA] rounded-md transition-colors inline-flex items-center gap-1"
+                        >
+                          <span>Open</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -534,84 +591,94 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
 
         {/* Top Findings Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
-          {findings.slice(0, 4).map((finding) => {
-            const app = applications.find((a) => a.id === finding.applicationId);
-            return (
-              <div
-                key={finding.id}
-                className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-4 h-full"
-              >
-                <div className="space-y-3.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-mono text-[#64748B]">
-                        <span className="font-semibold text-[#0F172A]">{finding.reference}</span>
-                        <span>·</span>
-                        <span className="text-[#4F46E5] font-medium">
-                          {finding.ruleKey} {finding.ruleVersion}
-                        </span>
+        {findings.length === 0 ? (
+          <div className="p-8 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg text-center space-y-2">
+            <CheckCircle2 className="w-8 h-8 text-[#0D9488] mx-auto" />
+            <h3 className="text-sm font-semibold text-[#0A2540]">Zero Regulatory Findings Detected</h3>
+            <p className="text-xs text-[#64748B]">
+              All evaluated parameters are concordant, or no active dockets have raised discrepancy alerts.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+            {findings.slice(0, 4).map((finding) => {
+              const app = applications.find((a) => a.id === finding.applicationId);
+              return (
+                <div
+                  key={finding.id}
+                  className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-4 h-full"
+                >
+                  <div className="space-y-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-mono text-[#64748B]">
+                          <span className="font-semibold text-[#0F172A]">{finding.reference}</span>
+                          <span>·</span>
+                          <span className="text-[#0D9488] font-medium">
+                            {finding.ruleKey} {finding.ruleVersion}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-base text-[#0F172A] mt-1">
+                          {finding.title}
+                        </h3>
+                        <div className="text-xs text-[#64748B] mt-0.5">
+                          {app?.institutionName} ({app?.referenceNumber})
+                        </div>
                       </div>
-                      <h3 className="font-semibold text-base text-[#0F172A] mt-1">
-                        {finding.title}
-                      </h3>
-                      <div className="text-xs text-[#64748B] mt-0.5">
-                        {app?.institutionName} ({app?.referenceNumber})
+                      <span
+                        className={`px-2.5 py-0.5 text-xs font-medium rounded border shrink-0 ${
+                          finding.severity === 'Material Discrepancy'
+                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                            : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
+                        }`}
+                      >
+                        {finding.severity}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs items-stretch">
+                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
+                        <div className="text-[#64748B] font-medium">Declared Claim</div>
+                        <div className="font-mono font-semibold text-[#0F172A] mt-1 truncate">
+                          {finding.declaredValue || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
+                        <div className="text-[#64748B] font-medium">Document Evidence</div>
+                        <div className="font-mono font-semibold text-[#E11D48] mt-1 truncate">
+                          {finding.evidenceValue || 'Missing'}
+                        </div>
                       </div>
                     </div>
-                    <span
-                      className={`px-2.5 py-0.5 text-xs font-medium rounded border shrink-0 ${
-                        finding.severity === 'Material Discrepancy'
-                          ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                          : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
-                      }`}
-                    >
-                      {finding.severity}
-                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-xs items-stretch">
-                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
-                      <div className="text-[#64748B] font-medium">Declared Claim</div>
-                      <div className="font-mono font-semibold text-[#0F172A] mt-1 truncate">
-                        {finding.declaredValue || 'N/A'}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
-                      <div className="text-[#64748B] font-medium">Document Evidence</div>
-                      <div className="font-mono font-semibold text-[#E11D48] mt-1 truncate">
-                        {finding.evidenceValue || 'Missing'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#64748B]">Status: {finding.status}</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onOpenReviewAction(finding)}
-                      className="font-semibold text-[#4F46E5] hover:text-[#4338CA]"
-                    >
-                      Record Decision
-                    </button>
-                    {app && (
+                  <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                    <span className="font-medium text-[#64748B]">Status: {finding.status}</span>
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => onSelectApplication(app)}
-                        className="font-medium text-[#64748B] hover:text-[#0F172A] inline-flex items-center gap-1"
+                        onClick={() => onOpenReviewAction(finding)}
+                        className="font-semibold text-[#0D9488] hover:text-[#0B7A6F]"
                       >
-                        <span>Open Docket</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        Record Decision
                       </button>
-                    )}
+                      {app && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectApplication(app)}
+                          className="font-medium text-[#64748B] hover:text-[#0F172A] inline-flex items-center gap-1"
+                        >
+                          <span>Open Docket</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <hr className="border-[#E2E8F0]" />
@@ -715,30 +782,39 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0] text-sm">
-                {auditEvents.slice(0, 5).map((e) => (
-                  <tr key={e.id} className="hover:bg-[#F8FAFC]">
-                    <td className="py-4 px-5 font-mono tabular-nums text-xs text-[#64748B] whitespace-nowrap">
-                      {new Date(e.timestamp).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </td>
-                    <td className="py-4 px-5 font-semibold text-[#0F172A] whitespace-nowrap truncate">
-                      {e.action}
-                    </td>
-                    <td className="py-4 px-5 text-[#0F172A] whitespace-nowrap truncate">
-                      {e.actorName}
-                    </td>
-                    <td className="py-4 px-5 font-mono text-xs font-medium text-[#4F46E5] whitespace-nowrap truncate">
-                      {e.entityReference}
-                    </td>
-                    <td className="py-4 px-5 text-xs text-[#64748B] truncate">
-                      {e.note || '—'}
+                {auditEvents.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-[#64748B]">
+                      No audit ledger events recorded yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  auditEvents.slice(0, 5).map((e) => (
+                    <tr key={e.id} className="hover:bg-[#F8FAFC]">
+                      <td className="py-4 px-5 font-mono tabular-nums text-xs text-[#64748B] whitespace-nowrap">
+                        {new Date(e.timestamp).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
+                      </td>
+                      <td className="py-4 px-5 font-semibold text-[#0F172A] whitespace-nowrap truncate">
+                        {e.action}
+                      </td>
+                      <td className="py-4 px-5 text-[#0F172A] whitespace-nowrap truncate">
+                        {e.actorName}
+                      </td>
+                      <td className="py-4 px-5 font-mono text-xs font-medium text-[#0D9488] whitespace-nowrap truncate">
+                        {e.entityReference}
+                      </td>
+                      <td className="py-4 px-5 text-xs text-[#64748B] truncate">
+                        {e.note || '—'}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
