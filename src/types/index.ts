@@ -10,6 +10,7 @@ export interface User {
   email: string;
   role: UserRole;
   department: string;
+  organizationId?: string;
 }
 
 export interface DeclaredDetails {
@@ -30,6 +31,7 @@ export interface Application {
   referenceNumber: string;
   institutionName: string;
   applicationType: 'Extension of Approval' | 'New Technical Campus' | 'Increase in Intake' | 'Change of Site';
+  organizationId?: string;
   status: ApplicationStatus;
   reviewStatus: ReviewStatus;
   declaredDetails: DeclaredDetails;

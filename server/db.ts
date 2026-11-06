@@ -1,15 +1,29 @@
-import { Application, DocumentRecord, ExtractedField, Finding, ReviewAction, AuditEvent, Rule, User } from '../src/types/index.ts';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { DatabaseSync } from 'node:sqlite';
+import {
+  Application,
+  DocumentRecord,
+  ExtractedField,
+  Finding,
+  ReviewAction,
+  AuditEvent,
+  Rule,
+  User,
+  UserRole
+} from '../src/types/index.ts';
 import { INITIAL_RULES, evaluateApplicationRules } from './rulesEngine.ts';
 import { extractFieldsFromPages } from './extraction.ts';
 
-class ScrutinyDatabase {
-  applications: Map<string, Application> = new Map();
-  documents: Map<string, DocumentRecord> = new Map();
-  extractedFields: Map<string, ExtractedField> = new Map();
-  findings: Map<string, Finding> = new Map();
-  reviewActions: ReviewAction[] = [];
-  auditEvents: AuditEvent[] = [];
-  rules: Map<string, Rule> = new Map();
+export interface DatabaseUser extends User {
+  passwordHash: string;
+}
+
+export class ScrutinyDatabase {
+  db: DatabaseSync;
+  dbPath: string;
 
   currentUser: User = {
     id: 'usr-001',
@@ -19,23 +33,275 @@ class ScrutinyDatabase {
     department: 'Regional Scrutiny Committee - Western Directorate'
   };
 
-  constructor() {
-    this.seedDefaultData();
-  }
-
-  seedDefaultData() {
-    this.applications.clear();
-    this.documents.clear();
-    this.extractedFields.clear();
-    this.findings.clear();
-    this.reviewActions = [];
-    this.auditEvents = [];
-    this.rules.clear();
-
-    for (const r of INITIAL_RULES) {
-      this.rules.set(r.id, { ...r });
+  constructor(customPath?: string) {
+    if (customPath) {
+      this.dbPath = customPath;
+    } else {
+      const dataDir = path.resolve(process.cwd(), 'data');
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      this.dbPath = path.join(dataDir, 'form2fact.db');
     }
 
+    this.db = new DatabaseSync(this.dbPath);
+    this.initSchema();
+    this.seedDefaultData(false);
+  }
+
+  private initSchema() {
+    this.db.exec(`
+      PRAGMA foreign_keys = ON;
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        displayName TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        passwordHash TEXT NOT NULL,
+        role TEXT NOT NULL,
+        department TEXT NOT NULL,
+        organizationId TEXT NOT NULL DEFAULT 'org-aicte-western',
+        createdAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS applications (
+        id TEXT PRIMARY KEY,
+        referenceNumber TEXT UNIQUE NOT NULL,
+        institutionName TEXT NOT NULL,
+        applicationType TEXT NOT NULL,
+        organizationId TEXT NOT NULL DEFAULT 'org-aicte-western',
+        status TEXT NOT NULL,
+        reviewStatus TEXT NOT NULL,
+        declaredDetails TEXT NOT NULL,
+        documentCount INTEGER NOT NULL DEFAULT 0,
+        openFindingsCount INTEGER NOT NULL DEFAULT 0,
+        totalFindingsCount INTEGER NOT NULL DEFAULT 0,
+        reviewerNotes TEXT,
+        assignedReviewer TEXT,
+        createdBy TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        applicationId TEXT NOT NULL,
+        originalFilename TEXT NOT NULL,
+        documentType TEXT NOT NULL,
+        storageKey TEXT NOT NULL,
+        mimeType TEXT NOT NULL,
+        sizeBytes INTEGER NOT NULL,
+        checksum TEXT NOT NULL,
+        pageCount INTEGER NOT NULL,
+        processingStatus TEXT NOT NULL,
+        isScannedOrTextPoor INTEGER NOT NULL DEFAULT 0,
+        extractedTextByPage TEXT,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY(applicationId) REFERENCES applications(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS extracted_fields (
+        id TEXT PRIMARY KEY,
+        documentId TEXT NOT NULL,
+        applicationId TEXT NOT NULL,
+        fieldName TEXT NOT NULL,
+        fieldLabel TEXT NOT NULL,
+        rawValue TEXT NOT NULL,
+        normalizedValue TEXT NOT NULL,
+        pageNumber INTEGER NOT NULL,
+        sourceText TEXT NOT NULL,
+        confidence REAL,
+        extractionMethod TEXT NOT NULL,
+        isCorrected INTEGER DEFAULT 0,
+        correctedValue TEXT,
+        correctedBy TEXT,
+        correctedAt TEXT,
+        correctionNote TEXT,
+        FOREIGN KEY(documentId) REFERENCES documents(id) ON DELETE CASCADE,
+        FOREIGN KEY(applicationId) REFERENCES applications(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS findings (
+        id TEXT PRIMARY KEY,
+        reference TEXT NOT NULL,
+        applicationId TEXT NOT NULL,
+        ruleId TEXT NOT NULL,
+        ruleKey TEXT NOT NULL,
+        ruleVersion TEXT NOT NULL,
+        category TEXT NOT NULL,
+        title TEXT NOT NULL,
+        explanation TEXT NOT NULL,
+        declaredValue TEXT,
+        evidenceValue TEXT,
+        severity TEXT NOT NULL,
+        status TEXT NOT NULL,
+        evidenceList TEXT NOT NULL,
+        assignedReviewer TEXT,
+        reviewerDecisionReason TEXT,
+        updatedBy TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY(applicationId) REFERENCES applications(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS rules (
+        id TEXT PRIMARY KEY,
+        ruleKey TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT NOT NULL,
+        applicableApplicationCategory TEXT NOT NULL,
+        applicableDocumentTypes TEXT NOT NULL,
+        version TEXT NOT NULL,
+        sourceReference TEXT NOT NULL,
+        effectiveFrom TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        readableCondition TEXT NOT NULL,
+        testCases TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS review_actions (
+        id TEXT PRIMARY KEY,
+        findingId TEXT NOT NULL,
+        applicationId TEXT NOT NULL,
+        reviewerId TEXT NOT NULL,
+        reviewerName TEXT NOT NULL,
+        action TEXT NOT NULL,
+        previousStatus TEXT NOT NULL,
+        newStatus TEXT NOT NULL,
+        note TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_events (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        actorId TEXT NOT NULL,
+        actorName TEXT NOT NULL,
+        action TEXT NOT NULL,
+        entityType TEXT NOT NULL,
+        entityReference TEXT NOT NULL,
+        beforeValue TEXT,
+        afterValue TEXT,
+        note TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS application_decisions (
+        id TEXT PRIMARY KEY,
+        applicationId TEXT NOT NULL,
+        reviewerId TEXT NOT NULL,
+        reviewerName TEXT NOT NULL,
+        decisionType TEXT NOT NULL,
+        rationale TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY(applicationId) REFERENCES applications(id) ON DELETE CASCADE
+      );
+    `);
+
+    // Automatic migration for existing databases: ensure organizationId exists
+    try {
+      this.db.exec("ALTER TABLE users ADD COLUMN organizationId TEXT NOT NULL DEFAULT 'org-aicte-western';");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE applications ADD COLUMN organizationId TEXT NOT NULL DEFAULT 'org-aicte-western';");
+    } catch {}
+  }
+
+  seedDefaultData(forceReset = false) {
+    const existingAppsCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM applications').get() as any)?.count || 0);
+    const existingUser4 = this.db.prepare("SELECT id FROM users WHERE id = 'usr-004'").get();
+
+    if (existingAppsCount > 0 && existingUser4 && !forceReset) {
+      return;
+    }
+
+    // Clear all existing data inside transaction
+    this.db.exec(`
+      DELETE FROM application_decisions;
+      DELETE FROM audit_events;
+      DELETE FROM review_actions;
+      DELETE FROM findings;
+      DELETE FROM extracted_fields;
+      DELETE FROM documents;
+      DELETE FROM applications;
+      DELETE FROM rules;
+      DELETE FROM users;
+    `);
+
+    // 1. Seed Users with verified bcrypt hashes and organization assignments
+    const insertUser = this.db.prepare(`
+      INSERT INTO users (id, displayName, email, passwordHash, role, department, organizationId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const defaultUsers: (DatabaseUser & { organizationId?: string })[] = [
+      {
+        id: 'usr-001',
+        displayName: 'Dr. Aruna Rao',
+        email: 'aruna.rao@scrutiny.edu.in',
+        passwordHash: bcrypt.hashSync('Reviewer123!', 10),
+        role: 'Reviewer',
+        department: 'Regional Scrutiny Committee - Western Directorate',
+        organizationId: 'org-aicte-western'
+      },
+      {
+        id: 'usr-002',
+        displayName: 'V. K. Sharma',
+        email: 'vk.sharma@scrutiny.edu.in',
+        passwordHash: bcrypt.hashSync('Admin123!', 10),
+        role: 'Administrator',
+        department: 'Quality Assurance Directorate',
+        organizationId: 'org-aicte-western'
+      },
+      {
+        id: 'usr-003',
+        displayName: 'S. Meenakshi',
+        email: 'meenakshi.s@audit.gov.in',
+        passwordHash: bcrypt.hashSync('Auditor123!', 10),
+        role: 'Read-only Viewer',
+        department: 'Statutory Compliance Audit',
+        organizationId: 'org-aicte-western'
+      },
+      {
+        id: 'usr-004',
+        displayName: 'Dr. Rajesh Verma',
+        email: 'rajesh.verma@scrutiny.edu.in',
+        passwordHash: bcrypt.hashSync('Reviewer123!', 10),
+        role: 'Reviewer',
+        department: 'Regional Scrutiny Committee - Central Directorate',
+        organizationId: 'org-aicte-central'
+      }
+    ];
+
+    for (const u of defaultUsers) {
+      insertUser.run(u.id, u.displayName, u.email, u.passwordHash, u.role, u.department, u.organizationId || 'org-aicte-western', '2026-01-01T00:00:00.000Z');
+    }
+
+    // 2. Seed Rules
+    const insertRule = this.db.prepare(`
+      INSERT INTO rules (id, ruleKey, name, description, category, applicableApplicationCategory, applicableDocumentTypes, version, sourceReference, effectiveFrom, enabled, readableCondition, testCases)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const r of INITIAL_RULES) {
+      insertRule.run(
+        r.id,
+        r.ruleKey,
+        r.name,
+        r.description,
+        r.category,
+        r.applicableApplicationCategory,
+        JSON.stringify(r.applicableDocumentTypes),
+        r.version,
+        r.sourceReference,
+        r.effectiveFrom,
+        r.enabled ? 1 : 0,
+        r.readableCondition,
+        JSON.stringify(r.testCases)
+      );
+    }
+
+    // 3. Seed Demo Applications
     // App 1: Compliant
     const app1Id = 'app-1104';
     const app1: Application = {
@@ -43,6 +309,7 @@ class ScrutinyDatabase {
       referenceNumber: 'APP-2026-EOA-1104',
       institutionName: 'Kalyani Institute of Engineering & Technology',
       applicationType: 'Extension of Approval',
+      organizationId: 'org-aicte-western',
       status: 'Ready for Review',
       reviewStatus: 'Review Completed',
       declaredDetails: {
@@ -66,14 +333,14 @@ class ScrutinyDatabase {
       createdAt: '2026-03-12T09:30:00.000Z',
       updatedAt: '2026-03-14T14:15:00.000Z'
     };
-    this.applications.set(app1Id, app1);
+    this.rawInsertApplication(app1);
 
     const doc1_1: DocumentRecord = {
       id: 'doc-1104-lease',
       applicationId: app1Id,
       originalFilename: 'Registered_Lease_Deed_Kalyani_Trust_30Yr.pdf',
       documentType: 'Land Lease Deed',
-      storageKey: 'dockets/app-1104/lease_deed.pdf',
+      storageKey: `dockets/${app1Id}/lease_deed.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 1845200,
       checksum: 'sha256-a9f82bc71e843',
@@ -87,14 +354,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-12T09:35:00.000Z'
     };
-    this.documents.set(doc1_1.id, doc1_1);
-
     const doc1_2: DocumentRecord = {
       id: 'doc-1104-safety',
       applicationId: app1Id,
       originalFilename: 'Building_Safety_Structural_Fitness_2025.pdf',
       documentType: 'Building Safety Certificate',
-      storageKey: 'dockets/app-1104/building_safety.pdf',
+      storageKey: `dockets/${app1Id}/building_safety.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 945000,
       checksum: 'sha256-b3e100f9831',
@@ -105,14 +370,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-12T09:36:00.000Z'
     };
-    this.documents.set(doc1_2.id, doc1_2);
-
     const doc1_3: DocumentRecord = {
       id: 'doc-1104-fire',
       applicationId: app1Id,
       originalFilename: 'Fire_Safety_NOC_Municipal_Corp_2025.pdf',
       documentType: 'Fire Safety NOC',
-      storageKey: 'dockets/app-1104/fire_noc.pdf',
+      storageKey: `dockets/${app1Id}/fire_noc.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 812000,
       checksum: 'sha256-c77439ad22',
@@ -123,14 +386,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-12T09:37:00.000Z'
     };
-    this.documents.set(doc1_3.id, doc1_3);
-
     const doc1_4: DocumentRecord = {
       id: 'doc-1104-trust',
       applicationId: app1Id,
       originalFilename: 'Trust_Registration_Certificate_Bombay_Public_Trust.pdf',
       documentType: 'Society / Trust Registration Certificate',
-      storageKey: 'dockets/app-1104/trust_cert.pdf',
+      storageKey: `dockets/${app1Id}/trust_cert.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 1120000,
       checksum: 'sha256-d88190fa72',
@@ -141,20 +402,22 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-12T09:38:00.000Z'
     };
-    this.documents.set(doc1_4.id, doc1_4);
+
+    [doc1_1, doc1_2, doc1_3, doc1_4].forEach(d => this.rawInsertDocument(d));
 
     const flds1_1 = extractFieldsFromPages(doc1_1.id, app1Id, doc1_1.documentType, doc1_1.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
     const flds1_2 = extractFieldsFromPages(doc1_2.id, app1Id, doc1_2.documentType, doc1_2.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
     const flds1_4 = extractFieldsFromPages(doc1_4.id, app1Id, doc1_4.documentType, doc1_4.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
-    [...flds1_1, ...flds1_2, ...flds1_4].forEach(f => this.extractedFields.set(f.id, f));
+    [...flds1_1, ...flds1_2, ...flds1_4].forEach(f => this.rawInsertField(f));
 
-    // App 2: Clear Intentional Discrepancy
+    // App 2: Mismatch
     const app2Id = 'app-0842';
     const app2: Application = {
       id: app2Id,
       referenceNumber: 'APP-2026-NTC-0842',
       institutionName: 'Pragati Institute of Technology & Management',
       applicationType: 'New Technical Campus',
+      organizationId: 'org-aicte-western',
       status: 'Ready for Review',
       reviewStatus: 'Under Review',
       declaredDetails: {
@@ -178,14 +441,14 @@ class ScrutinyDatabase {
       createdAt: '2026-03-10T11:00:00.000Z',
       updatedAt: '2026-03-15T16:20:00.000Z'
     };
-    this.applications.set(app2Id, app2);
+    this.rawInsertApplication(app2);
 
     const doc2_1: DocumentRecord = {
       id: 'doc-0842-lease',
       applicationId: app2Id,
       originalFilename: 'Land_Lease_Agreement_Pragati_Ahmedabad.pdf',
       documentType: 'Land Lease Deed',
-      storageKey: 'dockets/app-0842/lease_deed.pdf',
+      storageKey: `dockets/${app2Id}/lease_deed.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 2410000,
       checksum: 'sha256-e32049ba1',
@@ -199,14 +462,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-10T11:05:00.000Z'
     };
-    this.documents.set(doc2_1.id, doc2_1);
-
     const doc2_2: DocumentRecord = {
       id: 'doc-0842-trust',
       applicationId: app2Id,
       originalFilename: 'Trust_Deed_Pragati_Foundation.pdf',
       documentType: 'Society / Trust Registration Certificate',
-      storageKey: 'dockets/app-0842/trust_cert.pdf',
+      storageKey: `dockets/${app2Id}/trust_cert.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 1320000,
       checksum: 'sha256-ff4190ba33',
@@ -217,14 +478,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-10T11:06:00.000Z'
     };
-    this.documents.set(doc2_2.id, doc2_2);
-
     const doc2_3: DocumentRecord = {
       id: 'doc-0842-safety',
       applicationId: app2Id,
       originalFilename: 'Building_Safety_Inspection_Report.pdf',
       documentType: 'Building Safety Certificate',
-      storageKey: 'dockets/app-0842/safety_cert.pdf',
+      storageKey: `dockets/${app2Id}/safety_cert.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 1540000,
       checksum: 'sha256-a1458921cf',
@@ -235,14 +494,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-10T11:07:00.000Z'
     };
-    this.documents.set(doc2_3.id, doc2_3);
-
     const doc2_4: DocumentRecord = {
       id: 'doc-0842-fire',
       applicationId: app2Id,
       originalFilename: 'Fire_NOC_Ahmedabad_Urban_Development.pdf',
       documentType: 'Fire Safety NOC',
-      storageKey: 'dockets/app-0842/fire_noc.pdf',
+      storageKey: `dockets/${app2Id}/fire_noc.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 790000,
       checksum: 'sha256-324901ba12',
@@ -253,28 +510,29 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-10T11:08:00.000Z'
     };
-    this.documents.set(doc2_4.id, doc2_4);
+    [doc2_1, doc2_2, doc2_3, doc2_4].forEach(d => this.rawInsertDocument(d));
 
     const flds2_1 = extractFieldsFromPages(doc2_1.id, app2Id, doc2_1.documentType, doc2_1.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
     const flds2_2 = extractFieldsFromPages(doc2_2.id, app2Id, doc2_2.documentType, doc2_2.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
     const flds2_3 = extractFieldsFromPages(doc2_3.id, app2Id, doc2_3.documentType, doc2_3.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
-    [...flds2_1, ...flds2_2, ...flds2_3].forEach(f => this.extractedFields.set(f.id, f));
+    [...flds2_1, ...flds2_2, ...flds2_3].forEach(f => this.rawInsertField(f));
 
     const evalResult2 = evaluateApplicationRules(
       app2,
       [doc2_1, doc2_2, doc2_3, doc2_4],
-      Array.from(this.extractedFields.values()).filter(f => f.applicationId === app2Id),
-      Array.from(this.rules.values())
+      this.getFieldsByApplication(app2Id),
+      this.getAllRules()
     );
-    evalResult2.findings.forEach(f => this.findings.set(f.id, f));
+    evalResult2.findings.forEach(f => this.rawInsertFinding(f));
 
-    // App 3: Uncertain / Missing Evidence
+    // App 3: Scanned / Missing Evidence
     const app3Id = 'app-0915';
     const app3: Application = {
       id: app3Id,
       referenceNumber: 'APP-2026-EOA-0915',
       institutionName: 'Vidyapeeth Academy of Pharmaceutical Sciences',
       applicationType: 'Increase in Intake',
+      organizationId: 'org-aicte-central',
       status: 'Ready for Review',
       reviewStatus: 'Pending Review',
       declaredDetails: {
@@ -298,14 +556,14 @@ class ScrutinyDatabase {
       createdAt: '2026-03-14T08:00:00.000Z',
       updatedAt: '2026-03-14T08:15:00.000Z'
     };
-    this.applications.set(app3Id, app3);
+    this.rawInsertApplication(app3);
 
     const doc3_1: DocumentRecord = {
       id: 'doc-0915-lease',
       applicationId: app3Id,
       originalFilename: 'Land_Title_Deed_Vidyapeeth_Trust.pdf',
       documentType: 'Land Lease Deed',
-      storageKey: 'dockets/app-0915/title_deed.pdf',
+      storageKey: `dockets/${app3Id}/title_deed.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 2100000,
       checksum: 'sha256-ff712bc9',
@@ -318,14 +576,12 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-14T08:05:00.000Z'
     };
-    this.documents.set(doc3_1.id, doc3_1);
-
     const doc3_2: DocumentRecord = {
       id: 'doc-0915-safety-scan',
       applicationId: app3Id,
       originalFilename: 'Building_Safety_Photocopy_Scanned.pdf',
       documentType: 'Building Safety Certificate',
-      storageKey: 'dockets/app-0915/safety_scan.pdf',
+      storageKey: `dockets/${app3Id}/safety_scan.pdf`,
       mimeType: 'application/pdf',
       sizeBytes: 4200000,
       checksum: 'sha256-dd189024c',
@@ -337,21 +593,21 @@ class ScrutinyDatabase {
       ],
       createdAt: '2026-03-14T08:06:00.000Z'
     };
-    this.documents.set(doc3_2.id, doc3_2);
+    [doc3_1, doc3_2].forEach(d => this.rawInsertDocument(d));
 
     const flds3_1 = extractFieldsFromPages(doc3_1.id, app3Id, doc3_1.documentType, doc3_1.extractedTextByPage!.map(p => ({ pageNumber: p.page, text: p.text })));
-    flds3_1.forEach(f => this.extractedFields.set(f.id, f));
+    flds3_1.forEach(f => this.rawInsertField(f));
 
     const evalResult3 = evaluateApplicationRules(
       app3,
       [doc3_1, doc3_2],
-      Array.from(this.extractedFields.values()).filter(f => f.applicationId === app3Id),
-      Array.from(this.rules.values())
+      this.getFieldsByApplication(app3Id),
+      this.getAllRules()
     );
-    evalResult3.findings.forEach(f => this.findings.set(f.id, f));
+    evalResult3.findings.forEach(f => this.rawInsertFinding(f));
 
     // Audit Events
-    this.auditEvents.push(
+    const initialEvents: AuditEvent[] = [
       {
         id: 'aud-001',
         timestamp: '2026-03-10T11:00:00.000Z',
@@ -390,28 +646,146 @@ class ScrutinyDatabase {
         action: 'Officer Note Added',
         entityType: 'Application',
         entityReference: 'APP-2026-NTC-0842',
-        note: 'Preliminary scrutiny identified 20-year lease gap on Page 3. Requesting certified supplementary lease addendum.'
+        note: 'Scrutiny Officer flag: Notice to institution scheduled for land tenure deficit.'
       }
+    ];
+
+    for (const e of initialEvents) {
+      this.recordAudit(e);
+    }
+  }
+
+  // --- RAW INSERT HELPERS FOR SEEDING & TRANSACTIONS ---
+
+  private rawInsertApplication(app: Application) {
+    this.db.prepare(`
+      INSERT INTO applications (id, referenceNumber, institutionName, applicationType, organizationId, status, reviewStatus, declaredDetails, documentCount, openFindingsCount, totalFindingsCount, reviewerNotes, assignedReviewer, createdBy, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      app.id,
+      app.referenceNumber,
+      app.institutionName,
+      app.applicationType,
+      app.organizationId || 'org-aicte-western',
+      app.status,
+      app.reviewStatus,
+      JSON.stringify(app.declaredDetails),
+      app.documentCount,
+      app.openFindingsCount,
+      app.totalFindingsCount,
+      app.reviewerNotes || '',
+      app.assignedReviewer || '',
+      app.createdBy,
+      app.createdAt,
+      app.updatedAt
     );
   }
 
-  getAllApplications(): Application[] {
-    return Array.from(this.applications.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  private rawInsertDocument(doc: DocumentRecord) {
+    this.db.prepare(`
+      INSERT INTO documents (id, applicationId, originalFilename, documentType, storageKey, mimeType, sizeBytes, checksum, pageCount, processingStatus, isScannedOrTextPoor, extractedTextByPage, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      doc.id,
+      doc.applicationId,
+      doc.originalFilename,
+      doc.documentType,
+      doc.storageKey,
+      doc.mimeType,
+      doc.sizeBytes,
+      doc.checksum,
+      doc.pageCount,
+      doc.processingStatus,
+      doc.isScannedOrTextPoor ? 1 : 0,
+      doc.extractedTextByPage ? JSON.stringify(doc.extractedTextByPage) : null,
+      doc.createdAt
+    );
   }
 
-  getApplicationById(id: string): Application | undefined {
-    return this.applications.get(id);
+  private rawInsertField(f: ExtractedField) {
+    this.db.prepare(`
+      INSERT INTO extracted_fields (id, documentId, applicationId, fieldName, fieldLabel, rawValue, normalizedValue, pageNumber, sourceText, confidence, extractionMethod, isCorrected, correctedValue, correctedBy, correctedAt, correctionNote)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      f.id,
+      f.documentId,
+      f.applicationId,
+      f.fieldName,
+      f.fieldLabel,
+      f.rawValue,
+      f.normalizedValue,
+      f.pageNumber,
+      f.sourceText,
+      f.confidence ?? null,
+      f.extractionMethod,
+      f.isCorrected ? 1 : 0,
+      f.correctedValue || null,
+      f.correctedBy || null,
+      f.correctedAt || null,
+      f.correctionNote || null
+    );
   }
 
-  createApplication(data: Partial<Application>): Application {
-    const id = `app-${Date.now().toString().slice(-4)}`;
+  private rawInsertFinding(f: Finding) {
+    this.db.prepare(`
+      INSERT INTO findings (id, reference, applicationId, ruleId, ruleKey, ruleVersion, category, title, explanation, declaredValue, evidenceValue, severity, status, evidenceList, assignedReviewer, reviewerDecisionReason, updatedBy, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      f.id,
+      f.reference,
+      f.applicationId,
+      f.ruleId,
+      f.ruleKey,
+      f.ruleVersion,
+      f.category,
+      f.title,
+      f.explanation,
+      f.declaredValue || null,
+      f.evidenceValue || null,
+      f.severity,
+      f.status,
+      JSON.stringify(f.evidenceList || []),
+      f.assignedReviewer || null,
+      f.reviewerDecisionReason || null,
+      f.updatedBy || null,
+      f.createdAt,
+      f.updatedAt
+    );
+  }
+
+  // --- QUERY & MUTATION APIS ---
+
+  getAllApplications(userOrgId?: string, isAdmin = false): Application[] {
+    let rows: any[];
+    if (!isAdmin && userOrgId) {
+      rows = this.db.prepare('SELECT * FROM applications WHERE organizationId = ? ORDER BY createdAt DESC').all(userOrgId) as any[];
+    } else {
+      rows = this.db.prepare('SELECT * FROM applications ORDER BY createdAt DESC').all() as any[];
+    }
+    return rows.map(r => this.mapApplicationRow(r));
+  }
+
+  getApplicationById(id: string, userOrgId?: string, isAdmin = false): Application | undefined {
+    const row = this.db.prepare('SELECT * FROM applications WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    if (!isAdmin && userOrgId && row.organizationId !== userOrgId) {
+      return undefined;
+    }
+    return this.mapApplicationRow(row);
+  }
+
+  createApplication(data: Partial<Application>, actor?: User): Application {
+    const id = `app-${crypto.randomUUID()}`;
     const ref = data.referenceNumber || `APP-2026-${(data.applicationType || 'EOA').slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const effectiveActor = actor || this.currentUser;
+    const organizationId = data.organizationId || (effectiveActor as any).organizationId || 'org-aicte-western';
 
     const newApp: Application = {
       id,
       referenceNumber: ref,
       institutionName: data.institutionName || 'Untitled Technical Institution',
       applicationType: data.applicationType || 'Extension of Approval',
+      organizationId,
       status: 'Ready for Review',
       reviewStatus: 'Pending Review',
       declaredDetails: {
@@ -430,100 +804,122 @@ class ScrutinyDatabase {
       openFindingsCount: 0,
       totalFindingsCount: 0,
       reviewerNotes: data.reviewerNotes || '',
-      assignedReviewer: this.currentUser.displayName,
-      createdBy: this.currentUser.displayName,
+      assignedReviewer: effectiveActor.displayName,
+      createdBy: effectiveActor.displayName,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    this.applications.set(id, newApp);
+    this.rawInsertApplication(newApp);
+
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: 'Application Created',
       entityType: 'Application',
       entityReference: newApp.referenceNumber,
-      note: 'New application registered for scrutiny'
+      note: `New application registered for scrutiny [Org: ${organizationId}]`
     });
 
     return newApp;
   }
 
   getDocumentsByApplication(applicationId: string): DocumentRecord[] {
-    return Array.from(this.documents.values()).filter(d => d.applicationId === applicationId);
+    const rows = this.db.prepare('SELECT * FROM documents WHERE applicationId = ? ORDER BY createdAt ASC').all(applicationId) as any[];
+    return rows.map(r => this.mapDocumentRow(r));
   }
 
   getDocumentById(id: string): DocumentRecord | undefined {
-    return this.documents.get(id);
+    const row = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as any;
+    return row ? this.mapDocumentRow(row) : undefined;
   }
 
-  addDocument(doc: DocumentRecord): DocumentRecord {
-    this.documents.set(doc.id, doc);
-    const app = this.applications.get(doc.applicationId);
-    if (app) {
-      app.documentCount = this.getDocumentsByApplication(doc.applicationId).length;
-      app.updatedAt = new Date().toISOString();
-    }
+  addDocument(doc: DocumentRecord, actor?: User): DocumentRecord {
+    this.rawInsertDocument(doc);
+    const effectiveActor = actor || this.currentUser;
+
+    const docCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM documents WHERE applicationId = ?').get(doc.applicationId) as any)?.c || 0);
+    this.db.prepare('UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?').run(docCount, new Date().toISOString(), doc.applicationId);
+
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: 'Document Uploaded',
       entityType: 'Document',
       entityReference: doc.originalFilename,
       note: `Type: ${doc.documentType}, Size: ${(doc.sizeBytes / 1024).toFixed(1)} KB`
     });
+
     return doc;
   }
 
-  removeDocument(documentId: string): boolean {
-    const doc = this.documents.get(documentId);
+  /**
+   * Deletes a document, cascades its extracted fields, and re-evaluates all application rules.
+   */
+  removeDocument(documentId: string, actor?: User): boolean {
+    const doc = this.getDocumentById(documentId);
     if (!doc) return false;
 
-    this.documents.delete(documentId);
-    for (const [fId, f] of this.extractedFields.entries()) {
-      if (f.documentId === documentId) {
-        this.extractedFields.delete(fId);
-      }
-    }
-    const app = this.applications.get(doc.applicationId);
-    if (app) {
-      app.documentCount = this.getDocumentsByApplication(doc.applicationId).length;
-      app.updatedAt = new Date().toISOString();
-    }
+    const effectiveActor = actor || this.currentUser;
+    const appId = doc.applicationId;
+
+    // Delete fields and document
+    this.db.prepare('DELETE FROM extracted_fields WHERE documentId = ?').run(documentId);
+    this.db.prepare('DELETE FROM documents WHERE id = ?').run(documentId);
+
+    // Update application count
+    const docCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM documents WHERE applicationId = ?').get(appId) as any)?.c || 0);
+    this.db.prepare('UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?').run(docCount, new Date().toISOString(), appId);
+
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: 'Document Removed',
       entityType: 'Document',
       entityReference: doc.originalFilename,
-      note: `Document detached from application docket`
+      note: `Document detached from application docket. Re-evaluating validation checks.`
     });
+
+    // Re-run validation immediately so missing requirements (RULE-DOC-04) trigger and stale findings clear
+    this.runValidation(appId, effectiveActor);
+
     return true;
   }
 
   getFieldsByDocument(documentId: string): ExtractedField[] {
-    return Array.from(this.extractedFields.values()).filter(f => f.documentId === documentId);
+    const rows = this.db.prepare('SELECT * FROM extracted_fields WHERE documentId = ?').all(documentId) as any[];
+    return rows.map(r => this.mapFieldRow(r));
   }
 
   getFieldsByApplication(applicationId: string): ExtractedField[] {
-    return Array.from(this.extractedFields.values()).filter(f => f.applicationId === applicationId);
+    const rows = this.db.prepare('SELECT * FROM extracted_fields WHERE applicationId = ?').all(applicationId) as any[];
+    return rows.map(r => this.mapFieldRow(r));
   }
 
-  correctField(fieldId: string, correctedValue: string, note: string): ExtractedField | undefined {
-    const field = this.extractedFields.get(fieldId);
+  saveExtractedFields(fields: ExtractedField[]) {
+    for (const f of fields) {
+      this.db.prepare('DELETE FROM extracted_fields WHERE id = ?').run(f.id);
+      this.rawInsertField(f);
+    }
+  }
+
+  correctField(fieldId: string, correctedValue: string, note: string, actor?: User): ExtractedField | undefined {
+    const field = this.getFieldById(fieldId);
     if (!field) return undefined;
 
+    const effectiveActor = actor || this.currentUser;
     const previousValue = field.correctedValue || field.rawValue;
-    field.isCorrected = true;
-    field.correctedValue = correctedValue;
-    field.normalizedValue = correctedValue;
-    field.correctedBy = this.currentUser.displayName;
-    field.correctedAt = new Date().toISOString();
-    field.correctionNote = note;
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      UPDATE extracted_fields
+      SET isCorrected = 1, correctedValue = ?, normalizedValue = ?, correctedBy = ?, correctedAt = ?, correctionNote = ?
+      WHERE id = ?
+    `).run(correctedValue, correctedValue, effectiveActor.displayName, now, note, fieldId);
 
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: 'Extracted Field Corrected',
       entityType: 'ExtractedField',
       entityReference: field.fieldName,
@@ -532,74 +928,91 @@ class ScrutinyDatabase {
       note: `Officer correction: ${note}`
     });
 
-    this.runValidation(field.applicationId);
-    return field;
+    this.runValidation(field.applicationId, effectiveActor);
+    return this.getFieldById(fieldId);
   }
 
-  getFindingsByApplication(applicationId: string): Finding[] {
-    return Array.from(this.findings.values()).filter(f => f.applicationId === applicationId);
+  getFieldById(fieldId: string): ExtractedField | undefined {
+    const row = this.db.prepare('SELECT * FROM extracted_fields WHERE id = ?').get(fieldId) as any;
+    return row ? this.mapFieldRow(row) : undefined;
   }
 
-  getAllFindings(): Finding[] {
-    return Array.from(this.findings.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  getFindingsByApplication(applicationId: string, userOrgId?: string, isAdmin = false): Finding[] {
+    const app = this.getApplicationById(applicationId, userOrgId, isAdmin);
+    if (!app) return [];
+    const rows = this.db.prepare('SELECT * FROM findings WHERE applicationId = ? ORDER BY createdAt ASC').all(applicationId) as any[];
+    return rows.map(r => this.mapFindingRow(r));
+  }
+
+  getAllFindings(userOrgId?: string, isAdmin = false): Finding[] {
+    let rows: any[];
+    if (!isAdmin && userOrgId) {
+      rows = this.db.prepare(`
+        SELECT f.* FROM findings f
+        JOIN applications a ON f.applicationId = a.id
+        WHERE a.organizationId = ?
+        ORDER BY f.createdAt DESC
+      `).all(userOrgId) as any[];
+    } else {
+      rows = this.db.prepare('SELECT * FROM findings ORDER BY createdAt DESC').all() as any[];
+    }
+    return rows.map(r => this.mapFindingRow(r));
   }
 
   getFindingById(id: string): Finding | undefined {
-    return this.findings.get(id);
+    const row = this.db.prepare('SELECT * FROM findings WHERE id = ?').get(id) as any;
+    return row ? this.mapFindingRow(row) : undefined;
   }
 
   recordReviewAction(
     findingId: string,
     action: ReviewAction['action'],
     newStatus: Finding['status'],
-    note: string
+    note: string,
+    actor?: User
   ): Finding | undefined {
-    const finding = this.findings.get(findingId);
+    const finding = this.getFindingById(findingId);
     if (!finding) return undefined;
 
+    const effectiveActor = actor || this.currentUser;
     const previousStatus = finding.status;
-    finding.status = newStatus;
-    finding.reviewerDecisionReason = note;
-    finding.assignedReviewer = this.currentUser.displayName;
-    finding.updatedBy = this.currentUser.displayName;
-    finding.updatedAt = new Date().toISOString();
+    const now = new Date().toISOString();
 
-    const reviewAction: ReviewAction = {
-      id: `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      findingId,
-      applicationId: finding.applicationId,
-      reviewerId: this.currentUser.id,
-      reviewerName: this.currentUser.displayName,
-      action,
-      previousStatus,
-      newStatus,
-      note,
-      createdAt: new Date().toISOString()
-    };
-    this.reviewActions.push(reviewAction);
+    this.db.prepare(`
+      UPDATE findings
+      SET status = ?, reviewerDecisionReason = ?, updatedBy = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(newStatus, note, effectiveActor.displayName, now, findingId);
 
-    const app = this.applications.get(finding.applicationId);
-    if (app) {
-      const appFindings = this.getFindingsByApplication(app.id);
-      app.openFindingsCount = appFindings.filter(f => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine').length;
-      app.totalFindingsCount = appFindings.length;
-      
-      const hasConfirmed = appFindings.some(f => f.status === 'Confirmed');
-      const allResolved = appFindings.every(f => f.status === 'Confirmed' || f.status === 'Dismissed' || f.status === 'Corrected');
+    const actionId = `act-${crypto.randomUUID()}`;
+    this.db.prepare(`
+      INSERT INTO review_actions (id, findingId, applicationId, reviewerId, reviewerName, action, previousStatus, newStatus, note, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(actionId, findingId, finding.applicationId, effectiveActor.id, effectiveActor.displayName, action, previousStatus, newStatus, note, now);
 
-      if (hasConfirmed) {
-        app.reviewStatus = 'Discrepancies Confirmed';
-      } else if (allResolved) {
-        app.reviewStatus = 'Review Completed';
-      } else {
-        app.reviewStatus = 'Under Review';
-      }
-      app.updatedAt = new Date().toISOString();
+    // Update application review status
+    const allAppFindings = this.getFindingsByApplication(finding.applicationId);
+    const hasConfirmed = allAppFindings.some(f => f.status === 'Confirmed');
+    const allResolved = allAppFindings.every(f => f.status === 'Confirmed' || f.status === 'Dismissed' || f.status === 'Corrected');
+
+    let updatedReviewStatus = 'Under Review';
+    if (hasConfirmed) {
+      updatedReviewStatus = 'Discrepancies Confirmed';
+    } else if (allResolved) {
+      updatedReviewStatus = 'Review Completed';
     }
 
+    const openCount = allAppFindings.filter(f => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine').length;
+
+    this.db.prepare(`
+      UPDATE applications
+      SET reviewStatus = ?, openFindingsCount = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(updatedReviewStatus, openCount, now, finding.applicationId);
+
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: `Finding ${action}`,
       entityType: 'Finding',
       entityReference: finding.reference,
@@ -608,38 +1021,95 @@ class ScrutinyDatabase {
       note: `Review decision: ${note}`
     });
 
-    return finding;
+    return this.getFindingById(findingId);
+  }
+
+  recordApplicationDecision(
+    applicationId: string,
+    decisionType: 'Approved' | 'Rejected' | 'Clarification Required',
+    rationale: string,
+    actor?: User
+  ): { decisionId: string; application: Application } | undefined {
+    const app = this.getApplicationById(applicationId);
+    if (!app) return undefined;
+
+    const effectiveActor = actor || this.currentUser;
+    const decisionId = `dec-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      INSERT INTO application_decisions (id, applicationId, reviewerId, reviewerName, decisionType, rationale, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(decisionId, applicationId, effectiveActor.id, effectiveActor.displayName, decisionType, rationale, now);
+
+    let reviewStatus = 'Review Completed';
+    if (decisionType === 'Rejected') reviewStatus = 'Discrepancies Confirmed';
+    if (decisionType === 'Clarification Required') reviewStatus = 'Under Review';
+
+    this.db.prepare(`
+      UPDATE applications
+      SET reviewStatus = ?, reviewerNotes = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(reviewStatus, `[Decision: ${decisionType}] ${rationale}`, now, applicationId);
+
+    this.recordAudit({
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
+      action: `Application Decision: ${decisionType}`,
+      entityType: 'Application',
+      entityReference: app.referenceNumber,
+      note: rationale
+    });
+
+    return {
+      decisionId,
+      application: this.getApplicationById(applicationId)!
+    };
   }
 
   getAllRules(): Rule[] {
-    return Array.from(this.rules.values());
+    const rows = this.db.prepare('SELECT * FROM rules ORDER BY ruleKey ASC').all() as any[];
+    return rows.map(r => this.mapRuleRow(r));
   }
 
-  updateRule(ruleId: string, updates: Partial<Rule>): Rule | undefined {
-    const rule = this.rules.get(ruleId);
+  updateRule(ruleId: string, updates: Partial<Rule>, actor?: User): Rule | undefined {
+    const rule = this.getRuleById(ruleId);
     if (!rule) return undefined;
 
-    Object.assign(rule, updates);
+    const effectiveActor = actor || this.currentUser;
+    const newEnabled = updates.enabled !== undefined ? (updates.enabled ? 1 : 0) : (rule.enabled ? 1 : 0);
+
+    this.db.prepare(`
+      UPDATE rules
+      SET enabled = ?
+      WHERE id = ?
+    `).run(newEnabled, ruleId);
+
     this.recordAudit({
-      actorId: this.currentUser.id,
-      actorName: this.currentUser.displayName,
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
       action: 'Rule Configuration Changed',
       entityType: 'Rule',
       entityReference: rule.ruleKey,
       note: `Rule ${rule.ruleKey} updated: ${updates.enabled !== undefined ? (updates.enabled ? 'Enabled' : 'Disabled') : 'Settings changed'}`
     });
 
-    return rule;
+    return this.getRuleById(ruleId);
   }
 
-  runValidation(applicationId: string) {
-    const app = this.applications.get(applicationId);
+  getRuleById(ruleId: string): Rule | undefined {
+    const row = this.db.prepare('SELECT * FROM rules WHERE id = ?').get(ruleId) as any;
+    return row ? this.mapRuleRow(row) : undefined;
+  }
+
+  runValidation(applicationId: string, actor?: User) {
+    const app = this.getApplicationById(applicationId);
     if (!app) return null;
 
-    app.status = 'Validating';
+    const effectiveActor = actor || this.currentUser;
     const docs = this.getDocumentsByApplication(applicationId);
     const fields = this.getFieldsByApplication(applicationId);
-    const rules = Array.from(this.rules.values());
+    const rules = this.getAllRules();
 
     const result = evaluateApplicationRules(app, docs, fields, rules);
 
@@ -649,50 +1119,182 @@ class ScrutinyDatabase {
       if (ef.status !== 'Open') {
         previousReviewsByRule.set(ef.ruleKey, { status: ef.status, note: ef.reviewerDecisionReason });
       }
-      this.findings.delete(ef.id);
     }
 
+    // Delete previous findings for this application
+    this.db.prepare('DELETE FROM findings WHERE applicationId = ?').run(applicationId);
+
+    // Insert new findings, preserving prior non-open reviewer statuses
     for (const f of result.findings) {
       const prev = previousReviewsByRule.get(f.ruleKey);
       if (prev) {
         f.status = prev.status;
         f.reviewerDecisionReason = prev.note;
       }
-      this.findings.set(f.id, f);
+      this.rawInsertFinding(f);
     }
 
-    app.openFindingsCount = result.findings.filter(f => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine').length;
-    app.totalFindingsCount = result.findings.length;
-    app.status = 'Ready for Review';
-    app.updatedAt = new Date().toISOString();
+    const currentFindings = this.getFindingsByApplication(applicationId);
+    const openCount = currentFindings.filter(f => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine').length;
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      UPDATE applications
+      SET openFindingsCount = ?, totalFindingsCount = ?, status = 'Ready for Review', updatedAt = ?
+      WHERE id = ?
+    `).run(openCount, currentFindings.length, now, applicationId);
 
     this.recordAudit({
-      actorId: 'system',
-      actorName: 'Validation Engine (v1.2)',
+      actorId: effectiveActor.id || 'system',
+      actorName: effectiveActor.displayName || 'Validation Engine (v1.2)',
       action: 'Validation Executed',
       entityType: 'Application',
       entityReference: app.referenceNumber,
       note: `Evaluated ${result.summary.total} rules: ${result.summary.passed} passed, ${result.summary.findings} findings raised.`
     });
 
-    return result;
-  }
-
-  recordAudit(event: Omit<AuditEvent, 'id' | 'timestamp'>) {
-    const fullEvent: AuditEvent = {
-      id: `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      timestamp: new Date().toISOString(),
-      ...event
+    return {
+      findings: currentFindings,
+      summary: result.summary
     };
-    this.auditEvents.unshift(fullEvent);
   }
 
-  getAuditEvents(): AuditEvent[] {
-    return this.auditEvents;
+  recordAudit(event: Omit<AuditEvent, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) {
+    const id = event.id || `aud-${crypto.randomUUID()}`;
+    const timestamp = event.timestamp || new Date().toISOString();
+
+    this.db.prepare(`
+      INSERT INTO audit_events (id, timestamp, actorId, actorName, action, entityType, entityReference, beforeValue, afterValue, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      timestamp,
+      event.actorId,
+      event.actorName,
+      event.action,
+      event.entityType,
+      event.entityReference,
+      event.beforeValue || null,
+      event.afterValue || null,
+      event.note || null
+    );
+  }
+
+  getAuditEvents(userOrgId?: string, isAdmin = false): AuditEvent[] {
+    const rows = this.db.prepare('SELECT * FROM audit_events ORDER BY timestamp DESC').all() as any[];
+    const mapped: AuditEvent[] = rows.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      actorId: r.actorId,
+      actorName: r.actorName,
+      action: r.action,
+      entityType: r.entityType,
+      entityReference: r.entityReference,
+      beforeValue: r.beforeValue || undefined,
+      afterValue: r.afterValue || undefined,
+      note: r.note || undefined
+    }));
+
+    if (!userOrgId || isAdmin) {
+      return mapped;
+    }
+
+    // Isolate audit events strictly by tenant applications, documents, and findings
+    const orgApps = this.getAllApplications(userOrgId, false);
+    const orgAppIds = new Set(orgApps.map(a => a.id));
+    const orgAppRefs = new Set(orgApps.map(a => a.referenceNumber));
+    const orgDocIds = new Set(orgApps.flatMap(a => this.getDocumentsByApplication(a.id).map(d => d.id)));
+    const orgFindingIds = new Set(this.getAllFindings(userOrgId, false).map(f => f.id));
+
+    return mapped.filter(evt => {
+      if (evt.entityType === 'Application') {
+        return orgAppIds.has(evt.entityReference) || orgAppRefs.has(evt.entityReference);
+      }
+      if (evt.entityType === 'Document') {
+        return orgDocIds.has(evt.entityReference);
+      }
+      if (evt.entityType === 'Finding') {
+        return orgFindingIds.has(evt.entityReference);
+      }
+      // Non-entity or rule-level actions are general platform events
+      return true;
+    });
   }
 
   getReviewActionsByApplication(applicationId: string): ReviewAction[] {
-    return this.reviewActions.filter(r => r.applicationId === applicationId);
+    const rows = this.db.prepare('SELECT * FROM review_actions WHERE applicationId = ? ORDER BY createdAt DESC').all(applicationId) as any[];
+    return rows.map(r => ({
+      id: r.id,
+      findingId: r.findingId,
+      applicationId: r.applicationId,
+      reviewerId: r.reviewerId,
+      reviewerName: r.reviewerName,
+      action: r.action,
+      previousStatus: r.previousStatus,
+      newStatus: r.newStatus,
+      note: r.note,
+      createdAt: r.createdAt
+    }));
+  }
+
+  getUserByEmail(email: string): DatabaseUser | undefined {
+    const row = this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      displayName: row.displayName,
+      email: row.email,
+      passwordHash: row.passwordHash,
+      role: row.role as UserRole,
+      department: row.department,
+      organizationId: row.organizationId || 'org-aicte-western'
+    };
+  }
+
+  getUserById(id: string): User | undefined {
+    const row = this.db.prepare('SELECT id, displayName, email, role, department, organizationId FROM users WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      displayName: row.displayName,
+      email: row.email,
+      role: row.role as UserRole,
+      department: row.department,
+      organizationId: row.organizationId || 'org-aicte-western'
+    };
+  }
+
+  getAllUsers(): User[] {
+    const rows = this.db.prepare('SELECT id, displayName, email, role, department, organizationId FROM users ORDER BY displayName ASC').all() as any[];
+    return rows.map(r => ({
+      id: r.id,
+      displayName: r.displayName,
+      email: r.email,
+      role: r.role as UserRole,
+      department: r.department,
+      organizationId: r.organizationId || 'org-aicte-western'
+    }));
+  }
+
+  updateUserRole(userId: string, newRole: UserRole, adminActor?: User): User | undefined {
+    const user = this.getUserById(userId);
+    if (!user) return undefined;
+
+    this.db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
+
+    const effectiveActor = adminActor || this.currentUser;
+    this.recordAudit({
+      actorId: effectiveActor.id,
+      actorName: effectiveActor.displayName,
+      action: 'User Role Updated',
+      entityType: 'User' as any,
+      entityReference: user.email,
+      beforeValue: user.role,
+      afterValue: newRole,
+      note: `Statutory administrative role reassignment to ${newRole}`
+    });
+
+    return this.getUserById(userId);
   }
 
   setCurrentUser(user: User) {
@@ -705,6 +1307,110 @@ class ScrutinyDatabase {
       entityReference: user.displayName,
       note: `Role switched to ${user.role} (${user.department})`
     });
+  }
+
+  // --- ROW MAPPERS ---
+
+  private mapApplicationRow(r: any): Application {
+    return {
+      id: r.id,
+      referenceNumber: r.referenceNumber,
+      institutionName: r.institutionName,
+      applicationType: r.applicationType,
+      organizationId: r.organizationId || 'org-aicte-western',
+      status: r.status,
+      reviewStatus: r.reviewStatus,
+      declaredDetails: JSON.parse(r.declaredDetails),
+      documentCount: r.documentCount,
+      openFindingsCount: r.openFindingsCount,
+      totalFindingsCount: r.totalFindingsCount,
+      reviewerNotes: r.reviewerNotes || undefined,
+      assignedReviewer: r.assignedReviewer || undefined,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
+    };
+  }
+
+  private mapDocumentRow(r: any): DocumentRecord {
+    return {
+      id: r.id,
+      applicationId: r.applicationId,
+      originalFilename: r.originalFilename,
+      documentType: r.documentType,
+      storageKey: r.storageKey,
+      mimeType: r.mimeType,
+      sizeBytes: r.sizeBytes,
+      checksum: r.checksum,
+      pageCount: r.pageCount,
+      processingStatus: r.processingStatus,
+      isScannedOrTextPoor: Boolean(r.isScannedOrTextPoor),
+      extractedTextByPage: r.extractedTextByPage ? JSON.parse(r.extractedTextByPage) : undefined,
+      createdAt: r.createdAt
+    };
+  }
+
+  private mapFieldRow(r: any): ExtractedField {
+    return {
+      id: r.id,
+      documentId: r.documentId,
+      applicationId: r.applicationId,
+      fieldName: r.fieldName,
+      fieldLabel: r.fieldLabel,
+      rawValue: r.rawValue,
+      normalizedValue: r.normalizedValue,
+      pageNumber: r.pageNumber,
+      sourceText: r.sourceText,
+      confidence: r.confidence !== null ? Number(r.confidence) : null,
+      extractionMethod: r.extractionMethod,
+      isCorrected: Boolean(r.isCorrected),
+      correctedValue: r.correctedValue || undefined,
+      correctedBy: r.correctedBy || undefined,
+      correctedAt: r.correctedAt || undefined,
+      correctionNote: r.correctionNote || undefined
+    };
+  }
+
+  private mapFindingRow(r: any): Finding {
+    return {
+      id: r.id,
+      reference: r.reference,
+      applicationId: r.applicationId,
+      ruleId: r.ruleId,
+      ruleKey: r.ruleKey,
+      ruleVersion: r.ruleVersion,
+      category: r.category,
+      title: r.title,
+      explanation: r.explanation,
+      declaredValue: r.declaredValue || undefined,
+      evidenceValue: r.evidenceValue || undefined,
+      severity: r.severity,
+      status: r.status,
+      evidenceList: JSON.parse(r.evidenceList || '[]'),
+      assignedReviewer: r.assignedReviewer || undefined,
+      reviewerDecisionReason: r.reviewerDecisionReason || undefined,
+      updatedBy: r.updatedBy || undefined,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
+    };
+  }
+
+  private mapRuleRow(r: any): Rule {
+    return {
+      id: r.id,
+      ruleKey: r.ruleKey,
+      name: r.name,
+      description: r.description,
+      category: r.category,
+      applicableApplicationCategory: r.applicableApplicationCategory,
+      applicableDocumentTypes: JSON.parse(r.applicableDocumentTypes),
+      version: r.version,
+      sourceReference: r.sourceReference,
+      effectiveFrom: r.effectiveFrom,
+      enabled: Boolean(r.enabled),
+      readableCondition: r.readableCondition,
+      testCases: JSON.parse(r.testCases)
+    };
   }
 }
 
