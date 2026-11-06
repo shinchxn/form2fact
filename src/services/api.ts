@@ -138,6 +138,63 @@ export async function runValidation(applicationId: string) {
   return json.data;
 }
 
+
+export type AicteClassification =
+  | 'MATCH'
+  | 'MISMATCH'
+  | 'MISSING'
+  | 'UNCERTAIN'
+  | 'NOT_COMPARABLE';
+
+export interface AicteRegulatoryFinding {
+  ruleId: string;
+  classification: AicteClassification;
+  title: string;
+  explanation: string;
+  actualValue?: string;
+  expectedValue?: string;
+  applicability: string;
+  evidence?: {
+    documentId?: string;
+    documentName: string;
+    pageNumber?: number;
+    fieldName?: string;
+    excerpt?: string;
+    rawValue?: string;
+  };
+  source: {
+    sourceId: string;
+    title: string;
+    version: string;
+    officialUrl: string;
+    page: number;
+    verifiedOn: string;
+  };
+}
+
+export interface AicteLeasePreview {
+  mode: 'PREVIEW_ONLY';
+  findings: AicteRegulatoryFinding[];
+  context: Record<string, unknown>;
+}
+
+export async function fetchAicteLeasePreview(
+  applicationId: string
+): Promise<AicteLeasePreview> {
+  const res = await fetch(
+    `${API_BASE}/applications/${applicationId}/aicte-preview`,
+    { headers: getHeaders() }
+  );
+
+  const json = await res.json();
+
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to fetch AICTE preview');
+  }
+
+  return json.data as AicteLeasePreview;
+}
+
 export async function fetchFindings(params?: { status?: string; category?: string; severity?: string }): Promise<Finding[]> {
   const query = new URLSearchParams();
   if (params?.status) query.set('status', params.status);

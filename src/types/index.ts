@@ -24,6 +24,15 @@ export interface DeclaredDetails {
   sanctionedIntake: number;
   previousApprovalRef: string;
   applicationYear: string;
+
+  // Optional AICTE lease context
+  leaseArrangement?: 'PRIVATE_LAND' | 'PRIVATE_BUILDING' | 'OWNED' | 'OTHER' | 'PUBLIC_AUTHORITY_LAND_LEASE' | 'UNKNOWN';
+  applicableHandbookVersion?: string;
+  councilNotificationDate?: string;
+  lessorType?: 'INDIVIDUAL' | 'TRUST' | 'SOCIETY' | 'COMPANY' | 'OTHER';
+  isSubLease?: boolean;
+  subLeaseAssignmentRight?: boolean;
+  mortgageRegistered?: boolean;
 }
 
 export interface Application {
@@ -45,9 +54,19 @@ export interface Application {
   updatedAt: string;
 }
 
-export type DocumentType = 
+export type DocumentType =
   | 'Land Lease Deed'
   | 'Land Ownership Title Deed'
+  | 'Building Lease Deed'
+  | 'Land Conversion Certificate'
+  | 'Lessor Title Document'
+  | 'Encumbrance Certificate'
+  | 'Lessor Resolution'
+  | 'Approved Building Plan'
+  | 'Occupancy / Completion Certificate'
+  | 'Fire Safety Certificate'
+  | 'Land Use Certificate'
+  | 'Architect Certified Floor Plans'
   | 'Building Safety Certificate'
   | 'Society / Trust Registration Certificate'
   | 'AICTE Prior Approval Order'

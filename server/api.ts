@@ -17,6 +17,7 @@ import {
   generateToken
 } from './auth.ts';
 import { domainRegistry } from './domains/index.ts';
+import { buildAicteLeasePreview } from './domains/aicte/adapter.ts';
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.ts';
 import { jobQueue } from './core/jobs/index.ts';
@@ -561,6 +562,38 @@ router.patch('/api/v1/fields/:id', authenticateToken, requireRole(['Administrato
 // =========================================================================
 // 4. VALIDATION ENGINE & RULES CATALOG
 // =========================================================================
+
+// AICTE regulatory preview — does not modify production validation results.
+router.get('/api/v1/applications/:id/aicte-preview', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const isAdmin = req.user?.role === 'Administrator';
+  const userOrgId = req.user?.organizationId;
+  const app = db.getApplicationById(req.params.id, userOrgId, isAdmin);
+
+  if (!app) {
+    const globalApp = db.getApplicationById(req.params.id);
+    if (globalApp && globalApp.organizationId !== userOrgId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Application belongs to another regional organization.'
+      });
+    }
+
+    return res.status(404).json({
+      success: false,
+      error: 'Application not found'
+    });
+  }
+
+  const documents = db.getDocumentsByApplication(req.params.id);
+  const fields = db.getFieldsByApplication(req.params.id);
+
+  const preview = buildAicteLeasePreview(app, documents, fields);
+
+  return res.json({
+    success: true,
+    data: preview
+  });
+});
 
 router.post('/api/v1/applications/:id/validate', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
   const isAdmin = req.user?.role === 'Administrator';

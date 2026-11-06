@@ -61,6 +61,11 @@ export const Header: React.FC<HeaderProps> = ({
             label: selectedApplication ? `${selectedApplication.referenceNumber} Dossier` : 'Dossiers'
           }
         ];
+      case 'aicte-preview':
+        return [
+          { label: 'Governance', action: () => onNavigate('overview') },
+          { label: 'AICTE Preview' }
+        ];
       case 'audit':
         return [
           { label: 'Governance', action: () => onNavigate('overview') },
