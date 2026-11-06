@@ -1,0 +1,2294 @@
+[
+  {
+    "experiment": "E0_V1_Baseline",
+    "model": "LogisticRegression",
+    "train_samples": 47,
+    "v1_test": {
+      "accuracy": 0.1538,
+      "macro_f1": 0.108,
+      "weighted_f1": 0.1661,
+      "mismatch_recall": 0.2,
+      "mismatch_precision": 0.3333,
+      "mismatch_fn_rate": 0.8,
+      "mismatch_fp_rate": 0.25,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 0.9,
+      "confusion_matrix": [
+        [
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          2,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.16666666666666666,
+          "recall": 0.2,
+          "f1-score": 0.18181818181818182,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.3333333333333333,
+          "recall": 0.2,
+          "f1-score": 0.25,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.15384615384615385,
+        "macro avg": {
+          "precision": 0.1,
+          "recall": 0.08,
+          "f1-score": 0.08636363636363636,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.19230769230769232,
+          "recall": 0.15384615384615385,
+          "f1-score": 0.1660839160839161,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.3659,
+      "macro_f1": 0.2262,
+      "weighted_f1": 0.2636,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 0.07,
+      "confusion_matrix": [
+        [
+          11,
+          0,
+          0,
+          6,
+          0
+        ],
+        [
+          13,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.44,
+          "recall": 0.6470588235294118,
+          "f1-score": 0.5238095238095238,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.25,
+          "recall": 0.8,
+          "f1-score": 0.38095238095238093,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.36585365853658536,
+        "macro avg": {
+          "precision": 0.13799999999999998,
+          "recall": 0.28941176470588237,
+          "f1-score": 0.18095238095238095,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.2129268292682927,
+          "recall": 0.36585365853658536,
+          "f1-score": 0.26364692218350755,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E0_V1_Baseline",
+    "model": "MLPClassifier",
+    "train_samples": 47,
+    "v1_test": {
+      "accuracy": 0.4615,
+      "macro_f1": 0.2583,
+      "weighted_f1": 0.3974,
+      "mismatch_recall": 0.8,
+      "mismatch_precision": 0.4,
+      "mismatch_fn_rate": 0.2,
+      "mismatch_fp_rate": 0.75,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 1.45,
+      "confusion_matrix": [
+        [
+          2,
+          3,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          4,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.6666666666666666,
+          "recall": 0.4,
+          "f1-score": 0.5,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.4,
+          "recall": 0.8,
+          "f1-score": 0.5333333333333333,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.46153846153846156,
+        "macro avg": {
+          "precision": 0.21333333333333332,
+          "recall": 0.24000000000000005,
+          "f1-score": 0.20666666666666664,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.41025641025641024,
+          "recall": 0.46153846153846156,
+          "f1-score": 0.3974358974358974,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.1707,
+      "macro_f1": 0.1242,
+      "weighted_f1": 0.1734,
+      "mismatch_recall": 0.2353,
+      "mismatch_precision": 0.1667,
+      "mismatch_fn_rate": 0.7647,
+      "mismatch_fp_rate": 0.8333,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 2.16,
+      "confusion_matrix": [
+        [
+          2,
+          14,
+          0,
+          1,
+          0
+        ],
+        [
+          2,
+          4,
+          0,
+          11,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.5,
+          "recall": 0.11764705882352941,
+          "f1-score": 0.19047619047619047,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.16666666666666666,
+          "recall": 0.23529411764705882,
+          "f1-score": 0.1951219512195122,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.1111111111111111,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.17073170731707318,
+        "macro avg": {
+          "precision": 0.14871794871794872,
+          "recall": 0.11058823529411765,
+          "f1-score": 0.09934185056136276,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.2858036272670419,
+          "recall": 0.17073170731707318,
+          "f1-score": 0.17343229181420736,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E0_V1_Baseline",
+    "model": "HistGradientBoosting",
+    "train_samples": 47,
+    "v1_test": {
+      "accuracy": 0.1538,
+      "macro_f1": 0.0833,
+      "weighted_f1": 0.1282,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.625,
+      "abstention_rate": 0.2308,
+      "latency_ms_per_pair": 11.97,
+      "confusion_matrix": [
+        [
+          2,
+          3,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.2857142857142857,
+          "recall": 0.4,
+          "f1-score": 0.3333333333333333,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.15384615384615385,
+        "macro avg": {
+          "precision": 0.05714285714285714,
+          "recall": 0.08,
+          "f1-score": 0.06666666666666667,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.10989010989010987,
+          "recall": 0.15384615384615385,
+          "f1-score": 0.1282051282051282,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.3659,
+      "macro_f1": 0.1599,
+      "weighted_f1": 0.2651,
+      "mismatch_recall": 0.0588,
+      "mismatch_precision": 1.0,
+      "mismatch_fn_rate": 0.9412,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.4146,
+      "latency_ms_per_pair": 3.65,
+      "confusion_matrix": [
+        [
+          14,
+          0,
+          0,
+          3,
+          0
+        ],
+        [
+          15,
+          1,
+          0,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.3888888888888889,
+          "recall": 0.8235294117647058,
+          "f1-score": 0.5283018867924528,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 1.0,
+          "recall": 0.058823529411764705,
+          "f1-score": 0.1111111111111111,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.36585365853658536,
+        "macro avg": {
+          "precision": 0.2777777777777778,
+          "recall": 0.1764705882352941,
+          "f1-score": 0.12788259958071277,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.575880758807588,
+          "recall": 0.36585365853658536,
+          "f1-score": 0.2651224625453802,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E1_V2_Domain_Only",
+    "model": "LogisticRegression",
+    "train_samples": 319,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 0.16,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.8928,
+      "weighted_f1": 0.9279,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.9412,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0417,
+      "abstention_rate": 0.3415,
+      "latency_ms_per_pair": 0.06,
+      "confusion_matrix": [
+        [
+          16,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1-score": 0.8,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7098039215686274,
+          "recall": 0.7364705882352942,
+          "f1-score": 0.714248366013072,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.934959349593496,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9279132791327913,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E1_V2_Domain_Only",
+    "model": "MLPClassifier",
+    "train_samples": 319,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1471,
+      "weighted_f1": 0.2262,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 3.05,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.4166666666666667,
+          "recall": 1.0,
+          "f1-score": 0.5882352941176471,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.08333333333333334,
+          "recall": 0.2,
+          "f1-score": 0.11764705882352941,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.16025641025641027,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.22624434389140274,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.9361,
+      "weighted_f1": 0.9265,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.8889,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0833,
+      "abstention_rate": 0.6341,
+      "latency_ms_per_pair": 1.51,
+      "confusion_matrix": [
+        [
+          16,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.8888888888888888,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9142857142857143,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7660130718954248,
+          "recall": 0.7364705882352942,
+          "f1-score": 0.7488702147525677,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.929539295392954,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9265195509097948,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E1_V2_Domain_Only",
+    "model": "HistGradientBoosting",
+    "train_samples": 319,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 10.38,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.9089,
+      "weighted_f1": 0.9221,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.8889,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0833,
+      "abstention_rate": 0.0244,
+      "latency_ms_per_pair": 3.22,
+      "confusion_matrix": [
+        [
+          17,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          3,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9444444444444444,
+          "recall": 1.0,
+          "f1-score": 0.9714285714285714,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.8888888888888888,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9142857142857143,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.6,
+          "f1-score": 0.75,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7666666666666666,
+          "recall": 0.7082352941176471,
+          "f1-score": 0.7271428571428571,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.9308943089430893,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9221254355400696,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E2_V2_Domain_Plus_Public_SNLI",
+    "model": "LogisticRegression",
+    "train_samples": 519,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 0.21,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.8928,
+      "weighted_f1": 0.9279,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.9412,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0417,
+      "abstention_rate": 0.2439,
+      "latency_ms_per_pair": 0.04,
+      "confusion_matrix": [
+        [
+          16,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1-score": 0.8,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7098039215686274,
+          "recall": 0.7364705882352942,
+          "f1-score": 0.714248366013072,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.934959349593496,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9279132791327913,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E2_V2_Domain_Plus_Public_SNLI",
+    "model": "MLPClassifier",
+    "train_samples": 519,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.3846,
+      "latency_ms_per_pair": 2.65,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9512,
+      "macro_f1": 0.9504,
+      "weighted_f1": 0.9502,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.9412,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0417,
+      "abstention_rate": 0.3171,
+      "latency_ms_per_pair": 1.29,
+      "confusion_matrix": [
+        [
+          17,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9444444444444444,
+          "recall": 1.0,
+          "f1-score": 0.9714285714285714,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.9512195121951219,
+        "macro avg": {
+          "precision": 0.777124183006536,
+          "recall": 0.7482352941176471,
+          "f1-score": 0.7602987861811391,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.9525745257452575,
+          "recall": 0.9512195121951219,
+          "f1-score": 0.9502129307007355,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E2_V2_Domain_Plus_Public_SNLI",
+    "model": "HistGradientBoosting",
+    "train_samples": 519,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 11.87,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.9206,
+      "weighted_f1": 0.9268,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.9412,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0417,
+      "abstention_rate": 0.0976,
+      "latency_ms_per_pair": 3.75,
+      "confusion_matrix": [
+        [
+          16,
+          0,
+          0,
+          1,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.8,
+          "recall": 0.8,
+          "f1-score": 0.8,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7364705882352942,
+          "recall": 0.7364705882352942,
+          "f1-score": 0.7364705882352942,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.926829268292683,
+          "recall": 0.926829268292683,
+          "f1-score": 0.926829268292683,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E3_V2_Domain_Plus_Synthetic_Augmented",
+    "model": "LogisticRegression",
+    "train_samples": 819,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 0.3,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.8969,
+      "weighted_f1": 0.9289,
+      "mismatch_recall": 0.8824,
+      "mismatch_precision": 1.0,
+      "mismatch_fn_rate": 0.1176,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0488,
+      "latency_ms_per_pair": 0.06,
+      "confusion_matrix": [
+        [
+          16,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          15,
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 1.0,
+          "recall": 0.8823529411764706,
+          "f1-score": 0.9375,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1-score": 0.8,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.8333333333333334,
+          "recall": 1.0,
+          "f1-score": 0.9090909090909091,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.6882352941176471,
+          "recall": 0.7647058823529411,
+          "f1-score": 0.7175534759358289,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.9390243902439024,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9288525498891353,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E3_V2_Domain_Plus_Synthetic_Augmented",
+    "model": "MLPClassifier",
+    "train_samples": 819,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 1.0,
+      "latency_ms_per_pair": 1.86,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9268,
+      "macro_f1": 0.9361,
+      "weighted_f1": 0.9265,
+      "mismatch_recall": 0.9412,
+      "mismatch_precision": 0.8889,
+      "mismatch_fn_rate": 0.0588,
+      "mismatch_fp_rate": 0.0833,
+      "abstention_rate": 0.9268,
+      "latency_ms_per_pair": 0.98,
+      "confusion_matrix": [
+        [
+          16,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.9411764705882353,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9411764705882353,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.8888888888888888,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9142857142857143,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.8,
+          "f1-score": 0.8888888888888888,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.926829268292683,
+        "macro avg": {
+          "precision": 0.7660130718954248,
+          "recall": 0.7364705882352942,
+          "f1-score": 0.7488702147525677,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.929539295392954,
+          "recall": 0.926829268292683,
+          "f1-score": 0.9265195509097948,
+          "support": 41.0
+        }
+      }
+    }
+  },
+  {
+    "experiment": "E3_V2_Domain_Plus_Synthetic_Augmented",
+    "model": "HistGradientBoosting",
+    "train_samples": 819,
+    "v1_test": {
+      "accuracy": 0.3846,
+      "macro_f1": 0.1389,
+      "weighted_f1": 0.2137,
+      "mismatch_recall": 0.0,
+      "mismatch_precision": 0.0,
+      "mismatch_fn_rate": 1.0,
+      "mismatch_fp_rate": 0.0,
+      "abstention_rate": 0.0,
+      "latency_ms_per_pair": 12.14,
+      "confusion_matrix": [
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 0.38461538461538464,
+          "recall": 1.0,
+          "f1-score": 0.5555555555555556,
+          "support": 5.0
+        },
+        "MISMATCH": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 5.0
+        },
+        "MISSING": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 1.0
+        },
+        "UNCERTAIN": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 2.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.38461538461538464,
+        "macro avg": {
+          "precision": 0.07692307692307693,
+          "recall": 0.2,
+          "f1-score": 0.11111111111111112,
+          "support": 13.0
+        },
+        "weighted avg": {
+          "precision": 0.14792899408284024,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.21367521367521367,
+          "support": 13.0
+        }
+      }
+    },
+    "v2_test": {
+      "accuracy": 0.9756,
+      "macro_f1": 0.9853,
+      "weighted_f1": 0.9756,
+      "mismatch_recall": 1.0,
+      "mismatch_precision": 0.9444,
+      "mismatch_fn_rate": 0.0,
+      "mismatch_fp_rate": 0.0417,
+      "abstention_rate": 0.0732,
+      "latency_ms_per_pair": 3.33,
+      "confusion_matrix": [
+        [
+          16,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          17,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "per_class_report": {
+        "MATCH": {
+          "precision": 1.0,
+          "recall": 0.9411764705882353,
+          "f1-score": 0.9696969696969697,
+          "support": 17.0
+        },
+        "MISMATCH": {
+          "precision": 0.9444444444444444,
+          "recall": 1.0,
+          "f1-score": 0.9714285714285714,
+          "support": 17.0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 2.0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 5.0
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 0.0
+        },
+        "accuracy": 0.975609756097561,
+        "macro avg": {
+          "precision": 0.788888888888889,
+          "recall": 0.7882352941176471,
+          "f1-score": 0.7882251082251083,
+          "support": 41.0
+        },
+        "weighted avg": {
+          "precision": 0.9769647696476965,
+          "recall": 0.975609756097561,
+          "f1-score": 0.9755886390032731,
+          "support": 41.0
+        }
+      }
+    }
+  }
+]

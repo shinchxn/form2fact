@@ -1,0 +1,123 @@
+{
+  "model_version": "form2fact-hybrid-pairwise-v2.0-champion",
+  "calibration_study": {
+    "validation_sample_count": 162,
+    "test_sample_count": 41,
+    "raw_metrics_val": {
+      "brier_score": 0.0247,
+      "log_loss": 0.0553,
+      "ece": 0.0145
+    },
+    "raw_metrics_test": {
+      "brier_score": 0.0299,
+      "log_loss": 0.0486,
+      "ece": 0.0169
+    },
+    "calibrated_metrics_test": {
+      "brier_score": 0.0393,
+      "log_loss": 0.07,
+      "ece": 0.0257
+    },
+    "calibration_method": "CalibratedClassifierCV(method='sigmoid', cv='prefit')",
+    "abstention_sweep_raw": [
+      {
+        "threshold": 0.5,
+        "coverage": 1.0,
+        "accepted_accuracy": 0.9756,
+        "mismatch_recall": 1.0,
+        "false_mismatch_rate": 0.0417,
+        "uncertain_rate": 0.0
+      },
+      {
+        "threshold": 0.6,
+        "coverage": 0.9512,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0488
+      },
+      {
+        "threshold": 0.7,
+        "coverage": 0.9512,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0488
+      },
+      {
+        "threshold": 0.75,
+        "coverage": 0.9268,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0732
+      },
+      {
+        "threshold": 0.8,
+        "coverage": 0.9268,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0732
+      },
+      {
+        "threshold": 0.9,
+        "coverage": 0.9024,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0976
+      }
+    ],
+    "abstention_sweep_calibrated": [
+      {
+        "threshold": 0.5,
+        "coverage": 1.0,
+        "accepted_accuracy": 0.9756,
+        "mismatch_recall": 1.0,
+        "false_mismatch_rate": 0.0417,
+        "uncertain_rate": 0.0
+      },
+      {
+        "threshold": 0.6,
+        "coverage": 0.9024,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0976
+      },
+      {
+        "threshold": 0.7,
+        "coverage": 0.9024,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0976
+      },
+      {
+        "threshold": 0.75,
+        "coverage": 0.9024,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.9412,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.0976
+      },
+      {
+        "threshold": 0.8,
+        "coverage": 0.878,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.8824,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.122
+      },
+      {
+        "threshold": 0.9,
+        "coverage": 0.878,
+        "accepted_accuracy": 1.0,
+        "mismatch_recall": 0.8824,
+        "false_mismatch_rate": 0.0,
+        "uncertain_rate": 0.122
+      }
+    ]
+  }
+}

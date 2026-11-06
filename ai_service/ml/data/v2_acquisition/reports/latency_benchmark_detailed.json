@@ -1,0 +1,65 @@
+{
+  "n_runs": 50,
+  "batch_size": 1,
+  "device": "CPU",
+  "cpu_configuration": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+    "machine": "AMD64",
+    "logical_cpu_cores": 6,
+    "python_version": "3.13.7"
+  },
+  "temperature": 1.8182,
+  "breakdown": {
+    "1_preprocessing": {
+      "mean_ms": 0.077,
+      "median_ms": 0.076,
+      "p95_ms": 0.085,
+      "min_ms": 0.066,
+      "max_ms": 0.089
+    },
+    "2_embedding_generation": {
+      "mean_ms": 45.399,
+      "median_ms": 44.998,
+      "p95_ms": 49.142,
+      "min_ms": 42.171,
+      "max_ms": 64.65
+    },
+    "3_tabular_feature_assembly": {
+      "mean_ms": 0.133,
+      "median_ms": 0.124,
+      "p95_ms": 0.192,
+      "min_ms": 0.097,
+      "max_ms": 0.215
+    },
+    "4_classifier_head_inference": {
+      "mean_ms": 36.468,
+      "median_ms": 36.403,
+      "p95_ms": 38.504,
+      "min_ms": 34.932,
+      "max_ms": 39.646
+    },
+    "5_calibration_overhead": {
+      "mean_ms": 0.089,
+      "median_ms": 0.09,
+      "p95_ms": 0.094,
+      "min_ms": 0.075,
+      "max_ms": 0.103
+    },
+    "6_complete_end_to_end": {
+      "mean_ms": 82.18,
+      "median_ms": 81.908,
+      "p95_ms": 86.926,
+      "min_ms": 77.675,
+      "max_ms": 102.153
+    }
+  },
+  "classifier_latency_investigation": {
+    "root_cause": "HistGradientBoostingClassifier on a single sample incurs OpenMP thread pool synchronization overhead across multiple CPU cores. For batch_size=1, thread dispatch dominates computation time (~30-80 ms). In contrast, temperature scaling math is purely vectorized and requires <0.1 ms.",
+    "mitigation_strategies": [
+      "Set OMP_NUM_THREADS=1 for single-sample inference threads.",
+      "Batch pairwise requests (50 pairs process in ~350 ms, yielding ~7 ms/pair).",
+      "Export tree ensemble to ONNX Runtime or Treelite for instant single-sample scoring."
+    ]
+  }
+}
