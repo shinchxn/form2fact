@@ -1,0 +1,65 @@
+{
+  "metrics": {
+    "model_version": "form2fact-hybrid-pairwise-v2.0-ml",
+    "embedding_backbone": "sentence-transformers/all-MiniLM-L6-v2",
+    "dense_dim": 1536,
+    "tabular_dim": 8,
+    "total_feature_dim": 1544,
+    "classes": [
+      "MATCH",
+      "MISMATCH",
+      "MISSING",
+      "UNCERTAIN",
+      "NOT_COMPARABLE"
+    ],
+    "validation_accuracy": 0.6,
+    "validation_macro_f1": 0.4857,
+    "test_accuracy": 0.6154,
+    "test_macro_f1": 0.5884
+  },
+  "test_report": {
+    "MATCH": {
+      "precision": 0.8333333333333334,
+      "recall": 1.0,
+      "f1-score": 0.9090909090909091,
+      "support": 5.0
+    },
+    "MISMATCH": {
+      "precision": 0.5,
+      "recall": 0.4,
+      "f1-score": 0.4444444444444444,
+      "support": 5.0
+    },
+    "MISSING": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 1.0
+    },
+    "UNCERTAIN": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 2.0
+    },
+    "NOT_COMPARABLE": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 0.0
+    },
+    "accuracy": 0.6153846153846154,
+    "macro avg": {
+      "precision": 0.4666666666666667,
+      "recall": 0.48,
+      "f1-score": 0.4707070707070707,
+      "support": 13.0
+    },
+    "weighted avg": {
+      "precision": 0.5897435897435898,
+      "recall": 0.6153846153846154,
+      "f1-score": 0.5975135975135974,
+      "support": 13.0
+    }
+  }
+}
