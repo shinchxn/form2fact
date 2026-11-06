@@ -31,13 +31,17 @@ def health_check():
         "is_calibrated": getattr(ml_engine, "is_calibrated", False),
         "optimal_temperature": getattr(ml_engine, "temperature", 1.0),
         "abstention_threshold": getattr(ml_engine, "default_threshold", 0.60),
+        "artifact_checksum": getattr(ml_engine, "artifact_checksum", None),
+        "checksum_verified": getattr(ml_engine, "checksum_verified", False),
+        "startup_time_ms": getattr(ml_engine, "startup_time_ms", 0.0),
         "capabilities": [
             "pairwise_field_comparison",
             "confidence_estimation",
             "abstention_support",
             "deterministic_fast_path",
             "sentence_transformer_ml_classification",
-            "temperature_scaled_calibration"
+            "temperature_scaled_calibration",
+            "startup_checksum_validation"
         ]
     }
 

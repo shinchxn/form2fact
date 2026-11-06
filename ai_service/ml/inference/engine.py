@@ -48,6 +48,9 @@ class MLPairwiseInferenceEngine:
         self.calibration_method: Optional[str] = None
         self.default_threshold: float = float(os.environ.get("FORM2FACT_ML_ABSTENTION_THRESHOLD", "0.60"))
         self.model_version: str = "form2fact-hybrid-pairwise-v2.0-champion"
+        self.artifact_checksum: Optional[str] = None
+        self.checksum_verified: bool = False
+        self.startup_time_ms: float = 0.0
         self._load_artifacts()
 
     @classmethod
@@ -57,6 +60,10 @@ class MLPairwiseInferenceEngine:
         return cls._instance
 
     def _load_artifacts(self):
+        import time
+        import hashlib
+        t_start = time.perf_counter()
+
         # Resolve config path
         config_path = os.environ.get("FORM2FACT_ML_CONFIG_PATH")
         if config_path:
@@ -93,9 +100,23 @@ class MLPairwiseInferenceEngine:
 
         if w_p and w_p.exists():
             try:
+                raw_bytes = w_p.read_bytes()
+                self.artifact_checksum = hashlib.sha256(raw_bytes).hexdigest()
+
+                # Optional startup checksum validation
+                expected_sha = os.environ.get("FORM2FACT_ML_EXPECTED_CHECKSUM")
+                if expected_sha and self.artifact_checksum.lower() != expected_sha.lower().strip():
+                    logger.error(
+                        f"Checksum mismatch for {w_p}: got {self.artifact_checksum}, expected {expected_sha}"
+                    )
+                    self.checksum_verified = False
+                    self.clf = None
+                    return
+                else:
+                    self.checksum_verified = True
+
                 import pickle
-                with open(w_p, "rb") as f:
-                    loaded_obj = pickle.load(f)
+                loaded_obj = pickle.loads(raw_bytes)
 
                 if isinstance(loaded_obj, dict) and "base_model" in loaded_obj:
                     # Calibrated wrapper artifact
@@ -104,7 +125,7 @@ class MLPairwiseInferenceEngine:
                     self.is_calibrated = True
                     self.calibration_method = loaded_obj.get("calibration_method", "temperature_scaling")
                     logger.info(
-                        f"Loaded calibrated model artifact from {w_p} (T={self.temperature}, method={self.calibration_method})"
+                        f"Loaded calibrated model artifact from {w_p} (T={self.temperature}, method={self.calibration_method}, sha256={self.artifact_checksum[:12]}...)"
                     )
                 else:
                     # Raw estimator artifact
@@ -112,16 +133,20 @@ class MLPairwiseInferenceEngine:
                     self.temperature = 1.0
                     self.is_calibrated = False
                     self.calibration_method = None
-                    logger.info(f"Loaded raw classifier artifact from {w_p}")
+                    logger.info(f"Loaded raw classifier artifact from {w_p} (sha256={self.artifact_checksum[:12]}...)")
             except Exception as e:
                 logger.error(f"Failed to load weights from {w_p}: {e}")
                 self.clf = None
+                self.checksum_verified = False
         else:
             logger.warning(f"Weights path {w_p} does not exist.")
             self.clf = None
+            self.checksum_verified = False
+
+        self.startup_time_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
     def is_ready(self) -> bool:
-        return self.clf is not None
+        return self.clf is not None and self.checksum_verified
 
     def predict_probabilities(self, X: np.ndarray) -> np.ndarray:
         """

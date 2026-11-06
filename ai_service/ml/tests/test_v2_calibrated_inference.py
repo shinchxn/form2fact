@@ -279,3 +279,104 @@ def test_fastapi_batch_classify_endpoint(client):
     assert data["matches"] == 1
     assert data["missing"] == 1
 
+
+def test_corrupted_model_artifact_rejection(tmp_path, monkeypatch):
+    """Task 6: Verify corrupt pickle artifact is detected and readiness fails."""
+    corrupt_file = tmp_path / "corrupt_weights.pkl"
+    corrupt_file.write_bytes(b"CORRUPTED_NON_PICKLE_GARBAGE_BYTES")
+
+    monkeypatch.setenv("FORM2FACT_ML_WEIGHTS_PATH", str(corrupt_file))
+    fresh_engine = MLPairwiseInferenceEngine()
+    fresh_engine._load_artifacts()
+
+    assert fresh_engine.is_ready() is False
+    assert fresh_engine.clf is None
+
+
+def test_checksum_mismatch_rejection(monkeypatch):
+    """Task 6: Verify mismatch against expected SHA-256 rejects model on startup."""
+    fake_checksum = "0000000000000000000000000000000000000000000000000000000000000000"
+    monkeypatch.setenv("FORM2FACT_ML_EXPECTED_CHECKSUM", fake_checksum)
+
+    fresh_engine = MLPairwiseInferenceEngine()
+    fresh_engine._load_artifacts()
+
+    assert fresh_engine.checksum_verified is False
+    assert fresh_engine.is_ready() is False
+
+
+def test_v1_rollback_execution(monkeypatch):
+    """Task 4 & 6: Verify documented V1 rollback loads cleanly and performs inference."""
+    monkeypatch.setenv("FORM2FACT_ML_WEIGHTS_PATH", "ai_service/ml/artifacts/pairwise_classifier_weights.pkl")
+    monkeypatch.setenv("FORM2FACT_ML_CONFIG_PATH", "ai_service/ml/artifacts/model_config.json")
+
+    v1_engine = MLPairwiseInferenceEngine()
+    v1_engine._load_artifacts()
+
+    assert v1_engine.is_ready() is True
+    assert v1_engine.is_calibrated is False
+    assert v1_engine.temperature == 1.0
+
+    req = PairwiseRequest(
+        claim_field=FieldCandidate(
+            field_name="institutionName",
+            field_label="Institution Legal Name",
+            raw_value="Apex Institute"
+        ),
+        evidence_field=FieldCandidate(
+            field_name="institutionName",
+            field_label="Deed Name",
+            raw_value="Apex Institute"
+        )
+    )
+    res = v1_engine.classify(req)
+    assert res.label == PairwiseLabel.MATCH
+    assert res.confidence >= 0.95
+
+
+def test_numerical_stability_extreme_logits(engine):
+    """Task 2 & 6: Verify mathematical stability under extreme values without NaN/Inf."""
+    # Large magnitude feature vector
+    X_extreme = np.ones((1, 1544), dtype=np.float32) * 1e4
+    probs = engine.predict_probabilities(X_extreme)
+
+    assert not np.isnan(probs).any(), "Probabilities must not contain NaN"
+    assert not np.isinf(probs).any(), "Probabilities must not contain Inf"
+    assert np.isclose(np.sum(probs), 1.0, atol=1e-5), "Probabilities must sum to 1.0"
+    assert (probs >= 0.0).all() and (probs <= 1.0).all()
+
+
+def test_fastapi_http_503_when_unready(monkeypatch):
+    """Task 4 & 6: Verify FastAPI endpoints return HTTP 503 when model is unready."""
+    from ai_service.app.main import ml_engine, app
+
+    # Temporarily set ml_engine.clf = None
+    original_clf = ml_engine.clf
+    try:
+        ml_engine.clf = None
+        client = TestClient(app)
+
+        req_payload = {
+            "claim_field": {
+                "field_name": "trustName",
+                "field_label": "Trust Name",
+                "raw_value": "Alpha Trust"
+            },
+            "evidence_field": {
+                "field_name": "trustName",
+                "field_label": "Trust Name",
+                "raw_value": "Beta Trust"
+            }
+        }
+        res = client.post("/api/v1/classify-pair", json=req_payload)
+        assert res.status_code == 503
+        assert "not ready" in res.json()["detail"]
+
+        res_ml = client.post("/api/v1/ml/classify-pair", json=req_payload)
+        assert res_ml.status_code == 503
+
+        res_batch = client.post("/api/v1/batch-classify", json={"comparisons": [req_payload]})
+        assert res_batch.status_code == 503
+    finally:
+        ml_engine.clf = original_clf
+
