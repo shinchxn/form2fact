@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   RotateCcw,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { User } from '../types/index.ts';
-import { switchCurrentUser } from '../services/api.ts';
+import { switchCurrentUser, fetchUsers } from '../services/api.ts';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -22,30 +23,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [usersList, setUsersList] = useState<User[]>([]);
 
-  const demoUsers: User[] = [
-    {
-      id: 'usr-001',
-      displayName: 'Dr. Aruna Rao',
-      email: 'aruna.rao@scrutiny.edu.in',
-      role: 'Reviewer',
-      department: 'Western Scrutiny Committee'
-    },
-    {
-      id: 'usr-002',
-      displayName: 'V. K. Sharma',
-      email: 'vk.sharma@scrutiny.edu.in',
-      role: 'Administrator',
-      department: 'Quality Assurance Directorate'
-    },
-    {
-      id: 'usr-003',
-      displayName: 'S. Meenakshi',
-      email: 'meenakshi.s@audit.gov.in',
-      role: 'Read-only Viewer',
-      department: 'Statutory Compliance Audit'
-    }
-  ];
+  useEffect(() => {
+    fetchUsers()
+      .then((users) => {
+        if (users && users.length > 0) {
+          setUsersList(users);
+        }
+      })
+      .catch((err) => console.warn('Failed to load registered users:', err));
+  }, []);
+
+  const displayUsers = usersList.length > 0 ? usersList : [currentUser];
 
   const pipelineModules = [
     {
@@ -168,7 +158,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           aria-labelledby="persona-heading"
           className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch"
         >
-          {demoUsers.map((u) => {
+          {displayUsers.map((u) => {
             const isSelected = u.id === currentUser.id;
             return (
               <button
@@ -179,17 +169,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onClick={() => handleSwitchUser(u)}
                 className={`p-5 rounded-lg bg-[#FFFFFF] text-left transition-all flex flex-col justify-between gap-4 cursor-pointer h-full ${
                   isSelected
-                    ? 'border-[1.5px] border-[#4F46E5] shadow-2xs ring-2 ring-[#4F46E5]/10'
+                    ? 'border-[1.5px] border-[#0D9488] shadow-2xs ring-2 ring-[#0D9488]/10'
                     : 'border border-[#E2E8F0] hover:border-[#CBD5E1]'
                 }`}
               >
                 <div className="space-y-1.5 w-full">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-base text-[#0F172A]">
+                    <span className="font-semibold text-base text-[#0A2540]">
                       {u.displayName}
                     </span>
                     {isSelected ? (
-                      <span className="w-5 h-5 rounded-full bg-[#4F46E5] text-white flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-[#0D9488] text-white flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3 stroke-[3]" />
                       </span>
                     ) : (
@@ -208,7 +198,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded font-medium shrink-0 ${
                       isSelected
-                        ? 'bg-[#EEF2FF] text-[#4F46E5]'
+                        ? 'bg-[#F0FDFA] text-[#0D9488] border border-[#99F6E4]'
                         : 'bg-[#F1F5F9] text-[#475569]'
                     }`}
                   >

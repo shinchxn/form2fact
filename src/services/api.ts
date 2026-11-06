@@ -16,25 +16,29 @@ export function getAuthToken(): string | null {
   return authToken || (typeof window !== 'undefined' ? localStorage.getItem('f2f_token') : null);
 }
 
+export async function login(email: string, password: string): Promise<{ token: string; user: User }> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const json = await res.json();
+  if (!json.success || !json.token) {
+    throw new Error(json.error || 'Authentication failed. Please verify institutional credentials.');
+  }
+  setAuthToken(json.token);
+  return { token: json.token, user: json.user };
+}
+
+export function logout(): void {
+  setAuthToken(null);
+}
+
 export async function ensureAuthToken(): Promise<string> {
   const current = getAuthToken();
   if (current) {
     authToken = current;
     return current;
-  }
-  try {
-    const res = await fetch(`${API_BASE}/user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: 'usr-001' })
-    });
-    const json = await res.json();
-    if (json.success && json.token) {
-      setAuthToken(json.token);
-      return json.token;
-    }
-  } catch (err) {
-    console.warn('Auto auth bootstrap error:', err);
   }
   return '';
 }
@@ -318,7 +322,21 @@ export async function fetchCurrentUser(): Promise<User> {
     headers: getHeaders()
   });
   const json = await res.json();
+  if (!res.ok || !json.success) {
+    if (res.status === 401) {
+      logout();
+    }
+    throw new Error(json.error || 'Authentication required');
+  }
   return json.user || json.data;
+}
+
+export async function fetchUsers(): Promise<User[]> {
+  const res = await fetch(`${API_BASE}/users`, {
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  return json.data || [];
 }
 
 export async function switchCurrentUser(user: User): Promise<User> {
