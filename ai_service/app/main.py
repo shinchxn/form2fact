@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException
 from .schemas import (
     PairwiseRequest,
@@ -9,6 +10,10 @@ from .schemas import (
 from .classifier import HybridPairwiseClassifier, MODEL_VERSION as FALLBACK_VERSION
 from .dataset import evaluate_baseline_classifier
 from ai_service.ml.inference.engine import MLPairwiseInferenceEngine
+try:
+    from .model_loader import ModelArtifactLoader
+except ImportError:
+    ModelArtifactLoader = None
 
 app = FastAPI(
     title="Form2Fact AI Document Intelligence Service",
@@ -17,12 +22,17 @@ app = FastAPI(
 )
 
 ml_engine = MLPairwiseInferenceEngine.get_instance()
-classifier = HybridPairwiseClassifier(confidence_threshold=0.75)
+loader = ModelArtifactLoader.get_instance() if ModelArtifactLoader else None
+classifier = HybridPairwiseClassifier(
+    confidence_threshold=loader.model_config.get("confidence_threshold", 0.75) if loader else 0.75
+)
 
 
 @app.get("/api/v1/health")
+@app.get("/health")
 def health_check():
     ready = ml_engine.is_ready()
+    readiness_report = loader.get_readiness_report() if loader else {}
     return {
         "status": "healthy" if ready else "degraded",
         "service": "form2fact-ai-service",
@@ -34,6 +44,7 @@ def health_check():
         "artifact_checksum": getattr(ml_engine, "artifact_checksum", None),
         "checksum_verified": getattr(ml_engine, "checksum_verified", False),
         "startup_time_ms": getattr(ml_engine, "startup_time_ms", 0.0),
+        "model_readiness": readiness_report,
         "capabilities": [
             "pairwise_field_comparison",
             "confidence_estimation",
@@ -41,7 +52,8 @@ def health_check():
             "deterministic_fast_path",
             "sentence_transformer_ml_classification",
             "temperature_scaled_calibration",
-            "startup_checksum_validation"
+            "startup_checksum_validation",
+            "versioned_artifact_manifest"
         ]
     }
 
@@ -105,4 +117,5 @@ def run_evaluation():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

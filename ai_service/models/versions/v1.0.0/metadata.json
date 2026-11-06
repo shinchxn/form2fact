@@ -1,0 +1,27 @@
+{
+  "model_version": "v1.0.0",
+  "model_name": "Form2Fact Hybrid Pairwise Classifier",
+  "framework": "Hybrid Deterministic Heuristic + Lexical Semantic Abstention",
+  "author": "Person 1 (ML Trainer) & Person 6 (MLOps Deployer)",
+  "created_at": "2026-11-06T10:00:00Z",
+  "taxonomy": [
+    "MATCH",
+    "MISMATCH",
+    "MISSING",
+    "UNCERTAIN",
+    "NOT_COMPARABLE"
+  ],
+  "input_schema": {
+    "claim_field": "FieldCandidate (field_name, field_label, raw_value, normalized_value)",
+    "evidence_field": "FieldCandidate (field_name, field_label, raw_value, normalized_value, document_name, page_number)",
+    "confidence_threshold": "float (default: 0.75)"
+  },
+  "output_schema": {
+    "label": "PairwiseLabel",
+    "confidence": "float [0.0, 1.0]",
+    "is_deterministic": "bool",
+    "explanation": "string",
+    "requires_human_review": "bool"
+  },
+  "evaluation_reference": "docs/ai-models/benchmark-dataset.md"
+}
