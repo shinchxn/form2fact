@@ -798,7 +798,16 @@ export class ScrutinyDatabase {
         leaseExpiryDate: data.declaredDetails?.leaseExpiryDate || '2050-03-31',
         sanctionedIntake: data.declaredDetails?.sanctionedIntake || 300,
         previousApprovalRef: data.declaredDetails?.previousApprovalRef || '',
-        applicationYear: data.declaredDetails?.applicationYear || '2026-27'
+        applicationYear: data.declaredDetails?.applicationYear || '2026-27',
+
+        // Optional AICTE regulatory context
+        leaseArrangement: data.declaredDetails?.leaseArrangement,
+        applicableHandbookVersion: data.declaredDetails?.applicableHandbookVersion,
+        councilNotificationDate: data.declaredDetails?.councilNotificationDate,
+        lessorType: data.declaredDetails?.lessorType,
+        isSubLease: data.declaredDetails?.isSubLease,
+        subLeaseAssignmentRight: data.declaredDetails?.subLeaseAssignmentRight,
+        mortgageRegistered: data.declaredDetails?.mortgageRegistered
       },
       documentCount: 0,
       openFindingsCount: 0,

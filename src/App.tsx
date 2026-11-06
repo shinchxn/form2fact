@@ -7,6 +7,7 @@ import { ApplicationDetailView } from './components/ApplicationDetailView.tsx';
 import { DocumentReviewView } from './components/DocumentReviewView.tsx';
 import { FindingsView } from './components/FindingsView.tsx';
 import { RulesView } from './components/RulesView.tsx';
+import { AictePreviewView } from './components/AictePreviewView.tsx';
 import { ReportsView } from './components/ReportsView.tsx';
 import { AuditLogView } from './components/AuditLogView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
@@ -290,6 +291,14 @@ export default function App() {
                     const r = await fetchRules();
                     setRules(r);
                   }}
+                />
+              )}
+
+              {currentView === 'aicte-preview' && (
+                <AictePreviewView
+                  applications={applications}
+                  selectedApplication={selectedApplication}
+                  onSelectApplication={handleSelectApplication}
                 />
               )}
 

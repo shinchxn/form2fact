@@ -8,7 +8,8 @@ import {
   FileSpreadsheet,
   History,
   Settings,
-  Layers
+  Layers,
+  ShieldCheck
 } from 'lucide-react';
 import { User } from '../types/index.ts';
 
@@ -18,6 +19,7 @@ export type ViewType =
   | 'document-review'
   | 'findings'
   | 'rules'
+  | 'aicte-preview'
   | 'reports'
   | 'audit'
   | 'settings';
@@ -49,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const governanceNav = [
+    { id: 'aicte-preview' as ViewType, label: 'AICTE Preview', icon: ShieldCheck },
     { id: 'rules' as ViewType, label: 'Rules Engine', icon: Scale },
     { id: 'audit' as ViewType, label: 'Audit Ledger', icon: History },
     { id: 'settings' as ViewType, label: 'System Settings', icon: Settings },
