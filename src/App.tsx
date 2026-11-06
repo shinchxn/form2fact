@@ -37,10 +37,14 @@ import {
   fetchRules,
   fetchCurrentUser,
   resetDemoData,
-  ensureAuthToken
+  ensureAuthToken,
+  getAuthToken,
+  logout
 } from './services/api.ts';
+import { LoginView } from './components/LoginView.tsx';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!getAuthToken());
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -85,7 +89,12 @@ export default function App() {
     setIsLoading(true);
     setApiError(null);
     try {
-      await ensureAuthToken();
+      const token = getAuthToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
       const [appsData, findingsData, auditsData, rulesData, userData] = await Promise.all([
         fetchApplications(),
         fetchFindings(),
@@ -97,7 +106,10 @@ export default function App() {
       setAllFindings(findingsData);
       setAuditEvents(auditsData);
       setRules(rulesData);
-      if (userData) setCurrentUser(userData);
+      if (userData) {
+        setCurrentUser(userData);
+        setIsAuthenticated(true);
+      }
 
       // Preload default application context for Evidence Viewer / Dossiers without locking the Applications list view
       if (!selectedApplication && appsData.length > 0) {
@@ -106,10 +118,28 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Failed to load initial data:', err);
-      setApiError(err.message || 'Failed to connect to Form2Fact Scrutiny API.');
+      if (err.message && (err.message.includes('401') || err.message.includes('Authentication required') || err.message.includes('jwt expired') || err.message.includes('Unauthorized'))) {
+        logout();
+        setIsAuthenticated(false);
+      } else {
+        setApiError(err.message || 'Failed to connect to Form2Fact Scrutiny API.');
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLoginSuccess = async (user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    await loadGlobalData();
+  };
+
+  const handleSignOut = () => {
+    logout();
+    setIsAuthenticated(false);
+    setSelectedApplication(null);
+    setIsInspectingApplication(false);
   };
 
   const loadApplicationDetails = async (id: string) => {
@@ -181,6 +211,10 @@ export default function App() {
     (f) => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine'
   ).length;
 
+  if (!isAuthenticated) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="flex h-screen bg-[#F8FAFC] text-[#0F172A] overflow-hidden font-sans">
       {/* Modern SaaS Left Sidebar */}
@@ -189,6 +223,7 @@ export default function App() {
         onNavigate={handleNavigate}
         currentUser={currentUser}
         openFindingsCount={openFindingsCount}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Content Viewport */}
@@ -197,6 +232,7 @@ export default function App() {
         <Header
           currentView={currentView}
           selectedApplication={isInspectingApplication ? selectedApplication : null}
+          currentUser={currentUser}
           onNavigate={handleNavigate}
           onOpenIntake={() => setIsIntakeOpen(true)}
           onResetDemo={handleResetDemo}
