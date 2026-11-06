@@ -6,4 +6,22 @@ coverage/
 *.log
 .env*
 !.env.example
-data/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# AI Studio session cache
+.aistudio/
+
+# Runtime storage & databases (preserve directory structure and README)
+data/*.db
+data/*.sqlite
+data/dockets/*
+!data/dockets/.gitkeep
+!data/README.md
