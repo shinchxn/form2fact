@@ -193,4 +193,4 @@ Do not modify the legacy generic `RULE-TEN-01` as part of a catalog-only change.
 
 ---
 
-**Catalog conclusion:** The current implementation contains 14 deterministic lease-compliance checks with explicit applicability and uncertainty safeguards. Full external configuration, lifecycle management, historical versioning and broader AICTE coverage remain outstanding.
+**Catalog conclusion:** The current implementation contains 14 lease-compliance rules covering private land and private buildings, with explicit applicability and uncertainty safeguards. Versioned JSON configuration, lifecycle transitions and historical snapshots are implemented. All 14 rules remain UNDER_REVIEW and cannot produce definitive findings until source verification and review approval requirements are satisfied. Identity, legal status, faculty, programmes, financial requirements, affidavits, undertakings and broader infrastructure requirements remain outside the verified catalog pending authoritative source review.

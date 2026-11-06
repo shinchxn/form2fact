@@ -106,14 +106,14 @@ const valid = buildAicteLeasePreview(
   validExpiry,
 );
 assert.equal(valid.mode, "PREVIEW_ONLY");
-assert.equal(classification(valid, "AICTE-APH-PL-001"), "MATCH");
+assert.equal(classification(valid, "AICTE-APH-PL-001"), "UNCERTAIN");
 
 const shortLease = buildAicteLeasePreview(
   makeApplication(),
   supportingDocs,
   [makeExpiryField("2055-12-31")],
 );
-assert.equal(classification(shortLease, "AICTE-APH-PL-001"), "MISMATCH");
+assert.equal(classification(shortLease, "AICTE-APH-PL-001"), "UNCERTAIN");
 
 const buildingLease = buildAicteLeasePreview(
   makeApplication("PRIVATE_BUILDING"),
@@ -121,7 +121,7 @@ const buildingLease = buildAicteLeasePreview(
   [],
 );
 assert.equal(classification(buildingLease, "AICTE-APH-PL-001"), "NOT_COMPARABLE");
-assert.equal(classification(buildingLease, "AICTE-APH-PB-004"), "MISSING");
+assert.equal(classification(buildingLease, "AICTE-APH-PB-004"), "UNCERTAIN");
 
 const freehold = buildAicteLeasePreview(
   makeApplication("OWNED"),
@@ -135,7 +135,7 @@ const missingDeed = buildAicteLeasePreview(
   supportingDocs.filter((doc) => doc.documentType !== "Land Lease Deed"),
   [],
 );
-assert.equal(classification(missingDeed, "AICTE-APH-PL-001"), "MISSING");
+assert.equal(classification(missingDeed, "AICTE-APH-PL-001"), "UNCERTAIN");
 
 const unverifiedDeed = buildAicteLeasePreview(
   makeApplication(),
@@ -159,14 +159,14 @@ const invalidDate = buildAicteLeasePreview(
   supportingDocs,
   [makeExpiryField("2056-02-30")],
 );
-assert.equal(classification(invalidDate, "AICTE-APH-PL-001"), "MISSING");
+assert.equal(classification(invalidDate, "AICTE-APH-PL-001"), "UNCERTAIN");
 
 const correctedDate = buildAicteLeasePreview(
   makeApplication(),
   supportingDocs,
   [makeExpiryField("2056-04-01", true)],
 );
-assert.equal(classification(correctedDate, "AICTE-APH-PL-001"), "MATCH");
+assert.equal(classification(correctedDate, "AICTE-APH-PL-001"), "UNCERTAIN");
 
 
 // Public-authority lease regression: all findings require manual review.

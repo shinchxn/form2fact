@@ -139,43 +139,54 @@ The preview screen identifies its output as PREVIEW ONLY, displays five classifi
 
 The existing AICTE domain pack is registered through server/domains/index.ts.
 
-It currently imports INITIAL_RULES from the generic rules engine. The new regulatory evaluator is separate from that generic rule collection.
+The new regulatory evaluator remains separate from the generic INITIAL_RULES collection.
 
-The registry does not currently provide a persistent external configuration or lifecycle service for the new evaluator.
+The AICTE preview adapter loads the versioned JSON configuration through ruleConfiguration.ts and checks lifecycle eligibility before returning findings.
+
+This integration is limited to the authenticated AICTE preview endpoint. It does not replace or modify the generic Form2Fact validation engine.
 
 ## 11. Rule Configuration — Current State
 
-The 14 rules currently reside in TypeScript.
+The implementation includes:
+- External JSON rule configuration at server/domains/aicte/config/aicte-rules.json.
+- Configuration validation and duplicate rule-ID checks.
+- Rule lifecycle states: DRAFT, UNDER_REVIEW, ACTIVE, SUPERSEDED and DISABLED.
+- Activation safeguards requiring verified sources and approved review.
+- Lifecycle transition validation.
+- Historical configuration snapshots.
+- A JSONL lifecycle event audit log.
+- Preview adapter integration with lifecycle eligibility checks.
+- Effective handbook-version metadata.
+- Exception metadata, currently empty pending verification.
 
-The implementation does not demonstrate:
-- External JSON/YAML rule loading.
-- Persistent rule storage.
-- Draft and review workflows.
-- Effective-date scheduling.
-- Exception approval records.
-- Historical rule snapshots.
-- Automatic supersession.
+The following capabilities remain unimplemented:
+- Calendar-date activation scheduling.
+- Exception approval workflow.
 - Rule administration interface.
+- Integration with the main production validation engine.
+- Full integration with the generic domain registry lifecycle service.
 
-These are future requirements.
+All 14 configured rules currently remain UNDER_REVIEW with review approval pending. They cannot produce definitive preview findings.
 
 ## 12. Target Versioned Rule Architecture
 
-A future rule record should include:
+A future production-ready rule record should include:
 - Stable rule ID and rule version.
 - Lifecycle state.
 - Source document, version, clause and page.
-- Effective-from and effective-to dates.
-- Applicability and exception conditions.
+- Verified effective-from and effective-to dates.
+- Applicability and approved exception conditions.
 - Author, reviewer and approval timestamps.
 - Supersession relationship.
 - Change reason and audit history.
 
-Recommended lifecycle:
+Implemented lifecycle:
 
 DRAFT -> UNDER_REVIEW -> ACTIVE -> SUPERSEDED / DISABLED
 
-This is a target design, not current runtime functionality.
+The transition service validates permitted transitions and activation prerequisites. Historical snapshots preserve previous configurations.
+
+Calendar-date scheduling and exception approval remain future work. The current lifecycle implementation must not be interpreted as authorization to activate unverified or unapproved rules.
 
 ## 13. Historical Evaluation
 
@@ -209,30 +220,34 @@ Tests should cover each rule, correct and incorrect evidence, missing and unveri
 
 | Area | Current state |
 |---|---|
-| Deterministic lease evaluator | Implemented |
-| Application adapter | Implemented |
+| Deterministic lease evaluator | Implemented and tested |
+| Application adapter | Implemented and tested |
 | Authenticated preview API | Implemented |
 | Frontend preview | Implemented |
-| Generic validation integration | Not implemented |
-| External JSON/YAML configuration | Not implemented |
-| Full lifecycle management | Not implemented |
-| Historical rule snapshots | Not implemented |
-| Full AICTE coverage | Not implemented |
+| Generic production validation integration | Not implemented |
+| External JSON configuration loader | Implemented and tested |
+| Lifecycle transitions and activation safeguards | Implemented and tested |
+| Historical configuration snapshots | Implemented and tested |
+| Lifecycle event audit-log persistence | Implemented; persistence not yet integration-tested |
+| Calendar-date activation scheduling | Not implemented |
+| Exception approval workflow | Not implemented |
+| Full AICTE regulatory coverage | Not implemented |
 | Authorized portal-report ingestion | Not implemented |
 
 ## 18. Recommended Next Steps
 
-1. Obtain regulatory review of the current 14 rules.
-2. Finalize source excerpts and evidence provenance.
-3. Define a versioned configuration schema.
-4. Implement configuration validation and safe loading.
-5. Add lifecycle and approval controls.
-6. Add immutable historical evaluation snapshots.
-7. Design authorized report ingestion.
-8. Integrate with generic validation only after owner review.
-9. Run security, regression and regulatory acceptance tests.
-10. Obtain explicit approval before production activation.
+1. Obtain regulatory/domain-owner review and approval for the current 14 rules.
+2. Verify source excerpts, applicability and evidence requirements.
+3. Verify effective dates before configuring calendar-date activation.
+4. Define and approve any exception records before implementation.
+5. Add integration tests for lifecycle event audit-log persistence.
+6. Implement calendar-date activation scheduling.
+7. Implement an exception approval workflow.
+8. Design authorized AICTE report ingestion using documented interfaces or user-provided reports.
+9. Consider generic validation integration only after architecture-owner review.
+10. Run security, regression and regulatory acceptance tests before production activation.
+11. Keep all unapproved rules non-mandatory.
 
 ---
 
-**Conclusion:** The current AICTE implementation is an isolated, authenticated preview evaluator. The generic validation engine remains intact. External configuration, lifecycle management, historical snapshots and broader regulatory integration remain future work.
+**Conclusion:** The current AICTE implementation is an isolated, authenticated preview evaluator using versioned JSON configuration and lifecycle eligibility checks. Lifecycle transitions and historical configuration snapshots are implemented and tested. All 14 rules remain UNDER_REVIEW and cannot produce definitive findings until review approval is granted. The generic validation engine remains unchanged. Calendar-date activation, exception approval, broader AICTE regulatory coverage and authorized portal-report ingestion remain future work.

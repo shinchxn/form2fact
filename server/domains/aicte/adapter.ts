@@ -6,6 +6,60 @@ import {
   type AicteRegulatoryFinding,
   type LeaseArrangement,
 } from "./regulatoryRules.ts";
+import {
+  loadAicteRuleConfiguration,
+  getEligibleAicteRules,
+} from "./ruleConfiguration.ts";
+
+function evaluateConfiguredLeasePreview(
+  context: AicteLeaseContext,
+): AicteRegulatoryFinding[] {
+  const config = loadAicteRuleConfiguration();
+  const eligibleIds = new Set(
+    getEligibleAicteRules(config).map((rule) => rule.ruleId),
+  );
+
+  const configuredRules = new Map(
+    config.rules.map((rule) => [rule.ruleId, rule]),
+  );
+
+  return evaluateAicteLeaseCompliance(context).map((finding) => {
+    const rule = configuredRules.get(finding.ruleId);
+
+    if (!rule) {
+      return {
+        ...finding,
+        classification: "UNCERTAIN",
+        explanation: "No matching rule exists in the approved configuration.",
+      };
+    }
+
+    if (finding.classification === "NOT_COMPARABLE") {
+      return finding;
+    }
+
+    if (eligibleIds.has(rule.ruleId)) {
+      return finding;
+    }
+
+    if (
+      rule.status === "UNDER_REVIEW" ||
+      rule.status === "ACTIVE"
+    ) {
+      return {
+        ...finding,
+        classification: "UNCERTAIN",
+        explanation: `Rule is not eligible because regulatory review or approval requirements are incomplete. ${finding.explanation}`,
+      };
+    }
+
+    return {
+      ...finding,
+      classification: "NOT_COMPARABLE",
+      explanation: `Rule status is ${rule.status}; it cannot produce a compliance conclusion.`,
+    };
+  });
+}
 
 function mapVerificationStatus(
   status: DocumentRecord["verificationStatus"],
@@ -108,7 +162,7 @@ export function buildAicteLeasePreview(
 
   return {
     mode: "PREVIEW_ONLY",
-    findings: evaluateAicteLeaseCompliance(context),
+    findings: evaluateConfiguredLeasePreview(context),
     context: {
       leaseArrangement: context.leaseArrangement,
       applicableHandbookVersion: context.applicableHandbookVersion,

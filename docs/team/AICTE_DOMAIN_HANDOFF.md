@@ -126,15 +126,24 @@ These results describe the earlier completed test run. Re-run the checks after a
 
 ## 8. Known Limitations
 
-The following capabilities are not yet implemented:
+The following capabilities are implemented:
 
-- External JSON/YAML rule configuration.
-- Full rule lifecycle workflow.
-- Persistent historical rule versions.
-- Effective-date-based activation.
+- Versioned external JSON rule configuration and validation.
+- Rule lifecycle transitions with activation safeguards.
+- Historical configuration snapshots.
+- Preview adapter enforcement of lifecycle eligibility.
+- Effective handbook-version metadata.
+
+The following capabilities remain incomplete:
+
+- Calendar-date-based rule activation scheduling.
 - Exception approval workflow.
-- Full AICTE coverage across faculty, infrastructure, programmes and financial requirements.
-- Automated AICTE portal report ingestion.
+- Integration testing of lifecycle audit-log persistence.
+- Full AICTE coverage across identity, land/building, infrastructure, faculty, programmes, affidavits, finance and special categories.
+- Authorized AICTE portal-report ingestion.
+- Integration with the generic production validation engine.
+
+All 14 configured lease rules remain UNDER_REVIEW, with review approval pending. They cannot produce definitive compliance findings until the activation requirements are satisfied.
 
 The existing generic tenure rule has not been changed as part of this isolated preview implementation. It requires a separately reviewed correction if the team decides to align its behaviour with the verified source.
 
@@ -147,8 +156,8 @@ Before production use, the responsible reviewers should:
 3. Review public-authority lease treatment.
 4. Review evidence extraction and verification assumptions.
 5. Review API authorization and organization isolation.
-6. Decide whether external rule configuration is required.
-7. Approve rule lifecycle and historical versioning design.
+6. Review the implemented JSON configuration schema and lifecycle safeguards.
+7. Review historical snapshots and lifecycle audit-log persistence.
 8. Expand regulatory coverage only after source verification.
 9. Re-run tests, lint and build.
 10. Obtain explicit approval before production activation.

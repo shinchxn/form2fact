@@ -238,4 +238,4 @@ Before accepting a rule configuration change, confirm:
 
 ---
 
-**Conclusion:** The current AICTE rules are maintained in TypeScript and tested through focused evaluator and adapter tests. The JSON configuration loader, lifecycle transitions and historical snapshots are implemented with focused tests. Calendar-date scheduling, exception approval, administrative UI and integration of the external configuration into the production evaluator remain future work requiring review and approval.
+**Conclusion:** The AICTE rules are maintained in TypeScript and loaded through a versioned JSON configuration. The preview adapter enforces rule lifecycle eligibility: only ACTIVE rules with verified sources and approved reviews can produce definitive preview findings. All current rules remain UNDER_REVIEW, so applicable findings remain UNCERTAIN. Lifecycle transitions and historical snapshots are implemented and tested. Calendar-date activation scheduling, exception approval, administrative UI and integration with the main production validation engine remain future work requiring review and approval.

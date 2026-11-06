@@ -132,6 +132,10 @@ Run focused tests:
 
 `npx tsx server/domains/aicte/adapter.test.ts`
 
+`npx tsx server/domains/aicte/ruleConfiguration.test.ts`
+
+`npx tsx server/domains/aicte/ruleLifecycle.test.ts`
+
 Run the full project test suite:
 
 `npm test`
@@ -167,8 +171,8 @@ The AICTE preview implementation is acceptable for its current limited scope whe
 
 The current 14-rule implementation covers selected private-land and private-building lease checks from the cited handbook page. It is not a complete AICTE regulatory compliance engine.
 
-External rule configuration, lifecycle workflows, historical rule snapshots, exception approval and broader regulatory categories remain future work.
+JSON configuration loading, lifecycle transitions, activation safeguards and historical configuration snapshots are implemented and tested. Calendar-date activation, exception approval, integration testing of lifecycle audit-log persistence and broader regulatory categories remain future work.
 
 ---
 
-**Conclusion:** Existing evaluator, adapter and API checks provide focused coverage for the current preview implementation. Additional lifecycle, source-verification and exception tests are required before broader regulatory activation.
+**Conclusion:** Existing evaluator, adapter and API checks provide focused coverage for the current preview implementation. Configuration and lifecycle unit tests are implemented. Additional calendar-date activation, exception approval, audit-log persistence and source-verification integration tests are required before broader regulatory activation.

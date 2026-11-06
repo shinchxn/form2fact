@@ -155,9 +155,12 @@ The existing domain-pack relationship also retains a 30-year configuration.
 | Preview API | Implemented |
 | Frontend preview | Implemented |
 | Evaluator and adapter tests | Implemented |
-| External JSON/YAML rule configuration | Not implemented or demonstrated |
-| Rule lifecycle management | Not implemented |
-| Historical rule-version storage | Not implemented |
+| External JSON configuration loader | Implemented and tested |
+| Rule lifecycle transitions and activation safeguards | Implemented and tested |
+| Historical configuration snapshots | Implemented and tested |
+| Lifecycle event audit-log persistence | Implemented; persistence not yet integration-tested |
+| Calendar-date activation scheduling | Not implemented |
+| Exception approval workflow | Not implemented |
 | Full AICTE regulatory coverage | Not implemented |
 | Verified rules for all regulatory categories | Not implemented |
 | Generic validation integration | Not implemented; preview remains separate |
@@ -189,8 +192,8 @@ These results describe the inspected development state and do not constitute reg
 ## 12. Recommended Next Actions
 
 1. Maintain the verified source register and recheck applicable handbook versions and corrigenda.
-2. Complete the structured rule catalog with explicit lifecycle and verification metadata.
-3. Design external configuration and historical rule versioning without silently changing current runtime behaviour.
+2. Obtain regulatory review and approval for the 14 configured rules; keep them UNDER_REVIEW until approved.
+3. Add calendar-date activation scheduling and an exception approval workflow after authoritative requirements are verified.
 4. Improve evidence references where document page and extracted-field provenance are available.
 5. Have the legacy `RULE-TEN-01` path reviewed by the backend and regulatory owners.
 6. Expand source verification before adding rules for identity, infrastructure, faculty, programmes, affidavits, finance or special categories.
@@ -198,4 +201,4 @@ These results describe the inspected development state and do not constitute reg
 
 ---
 
-**Audit conclusion:** The repository contains a functioning, tested AICTE lease-compliance preview alongside an older generic AICTE validation path. The new evaluator is deliberately isolated and preview-only. Broader regulatory coverage, configurable rule lifecycle management and production integration remain future work.
+**Audit conclusion:** The repository contains a functioning, tested AICTE lease-compliance preview alongside an older generic AICTE validation path. The new evaluator is deliberately isolated and preview-only. Versioned JSON configuration, lifecycle transitions, activation safeguards and historical configuration snapshots are implemented and tested. All 14 rules remain UNDER_REVIEW and cannot produce definitive findings until the required review approval is granted. Calendar-date activation, exception approval, broader regulatory coverage and generic production validation integration remain future work.
