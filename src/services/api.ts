@@ -39,7 +39,7 @@ export async function ensureAuthToken(): Promise<string> {
   return '';
 }
 
-function getHeaders(contentType: string = 'application/json'): Record<string, string> {
+export function getHeaders(contentType: string = 'application/json'): Record<string, string> {
   const headers: Record<string, string> = {};
   if (contentType) headers['Content-Type'] = contentType;
   const token = getAuthToken();
@@ -96,7 +96,8 @@ export async function uploadDocument(applicationId: string, file: File, document
   formData.append('documentType', documentType);
 
   const headers: Record<string, string> = {};
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}/applications/${applicationId}/documents`, {
     method: 'POST',
@@ -115,6 +116,22 @@ export async function deleteDocument(documentId: string): Promise<void> {
   });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to delete document');
+}
+
+export async function downloadDocument(applicationId: string, docId: string, originalFilename: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/applications/${applicationId}/documents/${docId}/file`, {
+    headers: getHeaders('')
+  });
+  if (!res.ok) throw new Error(`Failed to stream document (${res.status} ${res.statusText})`);
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = originalFilename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 export async function correctField(fieldId: string, correctedValue: string, note: string): Promise<ExtractedField> {
@@ -345,5 +362,55 @@ export async function runDeepScrutiny(applicationId: string, query?: string): Pr
   });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to execute deep scrutiny synthesis');
+  return json.data;
+}
+
+// =========================================================================
+// PAIRWISE VERIFICATION & CLASSIFICATION API
+// =========================================================================
+
+export interface PairwiseComparisonRequest {
+  domainId?: string;
+  relationshipId?: string;
+  claimField: {
+    fieldName: string;
+    fieldLabel: string;
+    rawValue: string;
+    normalizedValue?: string;
+  };
+  evidenceField?: {
+    fieldName: string;
+    fieldLabel: string;
+    rawValue: string;
+    normalizedValue?: string;
+    documentId?: string;
+    documentName?: string;
+    pageNumber?: number;
+  };
+  comparisonType?: 'date' | 'numeric' | 'entity-name' | 'code' | 'address' | 'generic';
+  toleranceThreshold?: number;
+  confidenceThreshold?: number;
+}
+
+export interface PairwiseComparisonResult {
+  label: 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE';
+  confidence: number;
+  isDeterministic: boolean;
+  explanation: string;
+  normalizedClaimValue: string;
+  normalizedEvidenceValue?: string;
+  evidenceList: any[];
+  requiresHumanReview: boolean;
+  modelVersion: string;
+}
+
+export async function runPairwiseComparison(data: PairwiseComparisonRequest): Promise<PairwiseComparisonResult> {
+  const res = await fetch(`${API_BASE}/verification/pairwise`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Pairwise comparison request failed');
   return json.data;
 }

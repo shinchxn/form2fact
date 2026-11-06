@@ -9,12 +9,14 @@ Welcome to the central technical documentation and knowledge base for **Form2Fac
 ### 1. Architecture & System Design
 - 🏛️ **[Repository Architecture](architecture/REPOSITORY_ARCHITECTURE.md)** — Modular monolith structure, layer boundaries, and directory layout.
 - 📐 **[System Architecture](architecture/system-architecture.md)** — End-to-end component interaction, dual-engine design, and container orchestration.
+- 🖥️ **[Frontend Component Architecture](architecture/FRONTEND_COMPONENT_ARCHITECTURE.md)** — Component hierarchy, unidirectional state flow, and modal lifecycles.
 - 🔄 **[Data Flow Pipeline](architecture/data-flow.md)** — Lifecycle stages: Intake ➔ Ingestion ➔ Extraction ➔ Normalization ➔ Pairwise Classification ➔ Regulatory Rules ➔ Adjudication.
 - 📦 **[Domain Packs](architecture/domain-packs.md)** — Domain-agnostic abstraction and pluggable regulatory packs.
 - ⚡ **[Background Job Queues](architecture/background-jobs.md)** — Asynchronous document processing and job lifecycle.
 
 ### 2. Forensic Audit & Remediation
 - 📋 **[Master Audit Report](audit/MASTER_AUDIT_REPORT.md)** — Comprehensive technical baseline, codebase audit, and evaluation scorecards.
+- 🔍 **[Frontend Current State Audit](audit/FRONTEND_CURRENT_STATE.md)** — Audit of UI components, routing, authentication gaps, and remediation.
 - 📊 **[Implementation Gap Matrix](audit/IMPLEMENTATION_GAP_MATRIX.md)** — Complete gap analysis and implementation coverage tracking.
 - 🎯 **[Prioritized Correction Plan](audit/PRIORITIZED_CORRECTION_PLAN.md)** — Prioritized remediation roadmap (P0 through P3).
 - 🛡️ **[P0 Remediation Report](audit/P0_REMEDIATION_REPORT.md)** — Evidence report for P0-01 through P0-05 security and classification fixes.
@@ -42,6 +44,7 @@ Welcome to the central technical documentation and knowledge base for **Form2Fac
 
 ### 6. Design System & Frontend
 - 🎨 **[Enterprise Design System](design/DESIGN_SYSTEM.md)** — Design tokens, color palette, typography, status indicators, and component patterns.
+- 📐 **[Frontend Design System Specification](design/FRONTEND_DESIGN_SYSTEM.md)** — Tokenized design system, 5-class color palette, typography, and accessibility guidelines.
 
 ### 7. Regulatory Rules & Domain Configuration
 - 📜 **[Statutory Regulatory Norms](RULES_AND_REGULATORY_NORMS.md)** — AICTE Handbook citations, normalizer formulas, and concordance logic.
@@ -53,6 +56,8 @@ Welcome to the central technical documentation and knowledge base for **Form2Fac
 - 🛡️ **[Threat Model](security/threat-model.md)** — Threat vectors, mitigations, path traversal defense, and token validation.
 
 ### 9. Team & Operations
+- 🤝 **[Frontend Team Handoff](team/FRONTEND_HANDOFF.md)** — Person 7 cross-team handoff notes, workflow walkthrough, and test ledger.
+- 🌐 **[Frontend API Integration](operations/FRONTEND_API_INTEGRATION.md)** — Centralized client API contract, JWT protocol, and binary streaming.
 - 👥 **[Team Ownership & Workflows](team/TEAM_OWNERSHIP.md)** — Code ownership boundaries, branch strategies, and CI/CD checklists.
 - 🚀 **[Docker Guide](deployment/docker-guide.md)** — Multi-container Docker Compose setup instructions.
 - ✅ **[Production Checklist](deployment/production-checklist.md)** — Pre-launch security, infrastructure, and compliance checklist.

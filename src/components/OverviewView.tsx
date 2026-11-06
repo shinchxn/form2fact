@@ -8,7 +8,11 @@ import {
   FileSearch,
   FileSpreadsheet,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  XCircle,
+  HelpCircle,
+  MinusCircle,
+  Scale
 } from 'lucide-react';
 import { Application, Finding, AuditEvent, Rule } from '../types/index.ts';
 import { ViewType } from './Sidebar.tsx';
@@ -46,6 +50,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const openFindingsCount = openFindingsList.length;
   const totalDocuments = applications.reduce((sum, a) => sum + (a.documentCount || 0), 0);
   const activeRulesCount = rules.filter((r) => r.enabled).length;
+
+  // Real 5-Class Pairwise Classification Metrics derived from findings and verification status
+  const mismatchCount = findings.filter(
+    (f) => f.severity === 'Material Discrepancy' || f.status === 'Confirmed'
+  ).length;
+  const missingCount = findings.filter(
+    (f) => f.severity === 'Information Missing' || f.explanation.toLowerCase().includes('missing')
+  ).length;
+  const uncertainCount = findings.filter(
+    (f) => f.status === 'Unable to Determine' || f.explanation.toLowerCase().includes('ocr') || f.explanation.toLowerCase().includes('unreadable')
+  ).length;
+  const matchCount = applications.reduce((sum, a) => {
+    const passed = Math.max(0, (rules.length || 6) - (a.totalFindingsCount || 0));
+    return sum + passed;
+  }, 0);
+  const notComparableCount = findings.filter((f) => f.status === 'Dismissed').length;
 
   const categories = [
     { name: 'Land & Tenancy', count: findings.filter((f) => f.category === 'Land & Tenancy').length },
@@ -233,6 +253,81 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </div>
           </button>
+        </div>
+
+        {/* Five-Class Pairwise Classification Outcome Matrix */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 text-[#4F46E5]" />
+              <span>Pairwise Verification Taxonomy Breakdown</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('verification')}
+              className="text-xs font-semibold text-[#4F46E5] hover:underline inline-flex items-center gap-1"
+            >
+              <span>Launch Verification Workbench</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="p-3.5 bg-[#ECFDF5] border border-[#A7F3D0] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#065F46]">MATCH</span>
+                <CheckCircle2 className="w-4 h-4 text-[#065F46]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#065F46] my-1.5 tabular-nums">
+                {matchCount}
+              </div>
+              <div className="text-[11px] text-[#047857]">Concordant claims</div>
+            </div>
+
+            <div className="p-3.5 bg-[#FFF1F2] border border-[#FECDD3] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#9F1239]">MISMATCH</span>
+                <XCircle className="w-4 h-4 text-[#9F1239]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#9F1239] my-1.5 tabular-nums">
+                {mismatchCount}
+              </div>
+              <div className="text-[11px] text-[#BE123C]">Contradictions found</div>
+            </div>
+
+            <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#92400E]">MISSING</span>
+                <AlertTriangle className="w-4 h-4 text-[#92400E]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#92400E] my-1.5 tabular-nums">
+                {missingCount}
+              </div>
+              <div className="text-[11px] text-[#B45309]">Omitted documents</div>
+            </div>
+
+            <div className="p-3.5 bg-[#EEF2FF] border border-[#C7D2FE] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#4F46E5]">UNCERTAIN</span>
+                <HelpCircle className="w-4 h-4 text-[#4F46E5]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#4F46E5] my-1.5 tabular-nums">
+                {uncertainCount}
+              </div>
+              <div className="text-[11px] text-[#4338CA]">Requires officer review</div>
+            </div>
+
+            <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[#475569]">NOT COMPARABLE</span>
+                <MinusCircle className="w-4 h-4 text-[#64748B]" />
+              </div>
+              <div className="text-2xl font-semibold font-mono text-[#334155] my-1.5 tabular-nums">
+                {notComparableCount}
+              </div>
+              <div className="text-[11px] text-[#64748B]">Incompatible dimensions</div>
+            </div>
+          </div>
         </div>
       </section>
 

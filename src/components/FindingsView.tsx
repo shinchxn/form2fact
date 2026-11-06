@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Finding, Application } from '../types/index.ts';
 import { StatusBadge } from '../shared/components/StatusBadge.tsx';
+import { EmptyState } from '../shared/components/EmptyState.tsx';
 
 interface FindingsViewProps {
   findings: Finding[];
@@ -159,10 +160,23 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
       {/* Findings List */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
-          <div className="p-12 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg text-center text-[#64748B] space-y-2">
-            <p className="font-semibold text-base text-[#0F172A]">No matching findings</p>
-            <p className="text-sm">Adjust your search query or domain filter to view results.</p>
-          </div>
+          <EmptyState
+            title="No matching findings"
+            description="No discrepancies match your search query, status, or domain filter. Adjust your filter criteria to inspect other items."
+            action={
+              searchTerm || statusFilter !== 'all' || severityFilter !== 'all' || categoryFilter !== 'all'
+                ? {
+                    label: 'Reset Filters',
+                    onClick: () => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                      setSeverityFilter('all');
+                      setCategoryFilter('all');
+                    }
+                  }
+                : undefined
+            }
+          />
         ) : (
           filtered.map((finding) => {
             const app = applications.find((a) => a.id === finding.applicationId);

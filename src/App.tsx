@@ -15,6 +15,9 @@ import { NewApplicationModal } from './components/NewApplicationModal.tsx';
 import { CorrectionModal } from './components/CorrectionModal.tsx';
 import { ReviewActionModal } from './components/ReviewActionModal.tsx';
 import { ErrorBoundary } from './shared/components/ErrorBoundary.tsx';
+import { LoadingState } from './shared/components/LoadingState.tsx';
+import { PairwiseComparator } from './features/verification/PairwiseComparator.tsx';
+import { AlertCircle, RotateCw } from 'lucide-react';
 
 import {
   Application,
@@ -66,6 +69,7 @@ export default function App() {
   const [reviewFinding, setReviewFinding] = useState<Finding | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
@@ -78,6 +82,8 @@ export default function App() {
 
   // Load initial global data
   const loadGlobalData = async () => {
+    setIsLoading(true);
+    setApiError(null);
     try {
       await ensureAuthToken();
       const [appsData, findingsData, auditsData, rulesData, userData] = await Promise.all([
@@ -98,8 +104,9 @@ export default function App() {
         const mismatchApp = appsData.find((a) => a.referenceNumber.includes('0842')) || appsData[0];
         await loadApplicationDetails(mismatchApp.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load initial data:', err);
+      setApiError(err.message || 'Failed to connect to Form2Fact Scrutiny API.');
     } finally {
       setIsLoading(false);
     }
@@ -201,10 +208,25 @@ export default function App() {
           ref={mainScrollRef}
           className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
         >
-          {isLoading ? (
-            <div className="p-16 text-center text-sm text-[#64748B]">
-              Loading workspace...
+          {apiError && (
+            <div className="m-6 p-4 bg-[#FFF1F2] border border-[#FECDD3] rounded-lg text-sm text-[#9F1239] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <span>{apiError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={loadGlobalData}
+                className="px-3.5 py-1.5 bg-[#9F1239] hover:bg-[#881337] text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Retry Connection</span>
+              </button>
             </div>
+          )}
+
+          {isLoading ? (
+            <LoadingState message="Loading institutional scrutiny workspace..." />
           ) : (
             <ErrorBoundary>
               {currentView === 'overview' && (
@@ -218,6 +240,20 @@ export default function App() {
                   onOpenIntake={() => setIsIntakeOpen(true)}
                   onOpenReviewAction={(finding) => setReviewFinding(finding)}
                 />
+              )}
+
+              {currentView === 'verification' && (
+                <div className="px-6 lg:px-8 py-8 pb-24 max-w-[1440px] mx-auto space-y-6 text-sm">
+                  <div>
+                    <h1 className="text-xl font-semibold text-[#0F172A] tracking-tight">
+                      Pairwise Field Verification & Taxonomy Workbench
+                    </h1>
+                    <p className="text-sm text-[#64748B] mt-1">
+                      Cross-verify applicant declared parameters against supporting documentary evidence using hybrid deterministic validation and abstention logic.
+                    </p>
+                  </div>
+                  <PairwiseComparator />
+                </div>
               )}
 
               {currentView === 'applications' && (
