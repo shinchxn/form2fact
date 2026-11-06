@@ -226,12 +226,16 @@ Before accepting a rule configuration change, confirm:
 | Evidence classification | Implemented |
 | Applicability safeguards | Implemented |
 | Focused evaluator tests | Implemented |
-| External JSON/YAML loader | Not implemented |
-| Rule lifecycle workflow | Not implemented |
-| Persistent rule version history | Not implemented |
+| External JSON configuration loader | Implemented |
+| Rule lifecycle transitions | Implemented and tested |
+| Historical configuration snapshots | Implemented and tested |
+| Lifecycle event audit log | Implemented in code; persistence not yet integration-tested |
+| Effective handbook-version metadata | Implemented |
+| Calendar-date activation scheduling | Not implemented |
+| Exception metadata | Implemented; currently empty pending verification |
 | Exception approval workflow | Not implemented |
 | Rule administration interface | Not implemented |
 
 ---
 
-**Conclusion:** The current AICTE rules are maintained in TypeScript and tested through focused evaluator and adapter tests. External configuration, lifecycle management, effective-date scheduling and historical versioning remain future enhancements requiring design and approval.
+**Conclusion:** The current AICTE rules are maintained in TypeScript and tested through focused evaluator and adapter tests. The JSON configuration loader, lifecycle transitions and historical snapshots are implemented with focused tests. Calendar-date scheduling, exception approval, administrative UI and integration of the external configuration into the production evaluator remain future work requiring review and approval.
