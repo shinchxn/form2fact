@@ -118,7 +118,17 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Failed to load initial data:', err);
-      if (err.message && (err.message.includes('401') || err.message.includes('Authentication required') || err.message.includes('jwt expired') || err.message.includes('Unauthorized'))) {
+      const isAuthError = err.message && (
+        err.message.includes('401') ||
+        err.message.includes('Authentication') ||
+        err.message.includes('jwt expired') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('Invalid or expired') ||
+        err.message.includes('session token') ||
+        err.message.includes('INVALID_TOKEN') ||
+        err.message.includes('ROLE_REVOKED')
+      );
+      if (isAuthError) {
         logout();
         setIsAuthenticated(false);
       } else {

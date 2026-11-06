@@ -323,6 +323,9 @@ export async function fetchCurrentUser(): Promise<User> {
   });
   const json = await res.json();
   if (!res.ok || !json.success) {
+    if (res.status === 401) {
+      logout();
+    }
     throw new Error(json.error || 'Authentication required');
   }
   return json.user || json.data;
