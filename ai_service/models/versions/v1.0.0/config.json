@@ -1,0 +1,8 @@
+{
+  "confidence_threshold": 0.75,
+  "jaccard_similarity_threshold": 0.70,
+  "abstention_overlap_threshold": 0.20,
+  "numeric_tolerance": 0.01,
+  "enable_ocr_corruption_detection": true,
+  "enable_acronym_normalization": true
+}
