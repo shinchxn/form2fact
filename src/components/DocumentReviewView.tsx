@@ -8,10 +8,12 @@ import {
   AlertTriangle,
   FileSearch,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  Download
 } from 'lucide-react';
 import { DocumentRecord, ExtractedField, Finding, Application } from '../types/index.ts';
 import { ViewType } from './Sidebar.tsx';
+import { downloadDocument } from '../services/api.ts';
 
 interface DocumentReviewViewProps {
   application: Application | null;
@@ -183,6 +185,24 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
+
+          {activeDoc && application && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await downloadDocument(application.id, activeDoc.id, activeDoc.originalFilename);
+                } catch (err: any) {
+                  alert(`Document download failed: ${err.message}`);
+                }
+              }}
+              className="px-2.5 py-1.5 text-xs font-semibold text-[#4F46E5] hover:bg-[#EEF2FF] border border-[#C7D2FE] rounded-md transition-colors inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Download original statutory document"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download PDF</span>
+            </button>
+          )}
         </div>
       </div>
 
