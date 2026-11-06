@@ -355,7 +355,7 @@ router.post('/api/v1/applications/:id/documents', authenticateToken, requireRole
   const relativeStorageKey = `dockets/${applicationId}/${docId}.pdf`;
 
   let pageCount = 1;
-  let extractedPages: { page: number; text: string }[] = [];
+  let extractedPages: NonNullable<DocumentRecord['extractedTextByPage']> = [];
   let isScannedOrTextPoor = false;
   let processingStatus: DocumentRecord['processingStatus'] = 'Extracted';
 
@@ -386,7 +386,87 @@ router.post('/api/v1/applications/:id/documents', authenticateToken, requireRole
     processingStatus = 'Failed';
   }
 
+  // 5. OCR fallback for scanned or text-poor PDFs
+  if (isScannedOrTextPoor || processingStatus === 'Failed') {
+    const aiServiceUrl = process.env.AI_SERVICE_URL;
+    const ocrServiceToken = process.env.OCR_SERVICE_TOKEN;
+
+    if (aiServiceUrl && ocrServiceToken) {
+      try {
+        const formData = new FormData();
+
+        formData.append(
+          'file',
+          new Blob([new Uint8Array(file.buffer)], {
+            type: 'application/pdf'
+          }),
+          path.basename(file.originalname)
+        );
+
+        const ocrResponse = await fetch(
+          `${aiServiceUrl.replace(/\/+$/, '')}/api/v1/ocr/pdf`,
+          {
+            method: 'POST',
+            headers: {
+              'X-OCR-Service-Token': ocrServiceToken
+            },
+            body: formData,
+            signal: AbortSignal.timeout(180000)
+          }
+        );
+
+        if (!ocrResponse.ok) {
+          throw new Error(`OCR service returned HTTP ${ocrResponse.status}`);
+        }
+
+        const ocrData = await ocrResponse.json() as {
+          pageCount?: number;
+          pages?: Array<{
+            pageNumber: number;
+            text: string;
+            extractionMethod: 'text_layer' | 'ocr';
+            ocrConfidence: number | null;
+            characterCount: number;
+            status: 'extracted' | 'unreadable';
+          }>;
+        };
+
+        if (!Array.isArray(ocrData.pages) || ocrData.pages.length === 0) {
+          throw new Error('OCR service returned no page results');
+        }
+
+        extractedPages = ocrData.pages.map(page => ({
+          page: page.pageNumber,
+          text: typeof page.text === 'string' ? page.text : '',
+          extractionMethod: page.extractionMethod,
+          ocrConfidence: page.ocrConfidence ?? null,
+          characterCount: page.characterCount,
+          status: page.status
+        }));
+
+        pageCount = ocrData.pageCount || extractedPages.length;
+        isScannedOrTextPoor = true;
+
+        processingStatus = extractedPages.some(
+          page => page.text.trim().length > 0
+        )
+          ? 'Extracted'
+          : 'Scanned Unreadable';
+
+      } catch (ocrError) {
+        console.warn('OCR fallback failed; original PDF remains stored.');
+
+        if (processingStatus !== 'Failed') {
+          processingStatus = 'Scanned Unreadable';
+        }
+      }
+    } else {
+      console.warn('OCR fallback skipped: service configuration missing.');
+    }
+  }
+
   const docRecord: DocumentRecord = {
+
     id: docId,
     applicationId,
     originalFilename: path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_'),
