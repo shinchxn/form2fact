@@ -139,38 +139,61 @@ The interface follows a clean, modern, human-crafted Balanced SaaS aesthetic (Li
 
 ## 4. REST API Reference
 
-The backend operates via Express REST endpoints mounted both in standalone Node (`server.ts`) and through Vite Connect middleware during dev:
+The backend operates via Express REST endpoints mounted both in standalone Node (`server.ts`) and through Vite Connect middleware during development, versioned under `/api/v1`:
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/applications` | List all applications with summary statistics |
-| `GET` | `/api/applications/:id` | Fetch detailed application record, documents & fields |
-| `POST` | `/api/applications` | Create a new application intake record |
-| `POST` | `/api/applications/:id/extract` | Trigger document OCR & structured field extraction |
-| `POST` | `/api/applications/:id/validate` | Run deterministic regulatory rules against fields |
-| `POST` | `/api/applications/:id/findings/:findingId/resolve` | Adjudicate a finding (`confirmed`, `dismissed`, `indeterminate`) |
-| `POST` | `/api/applications/:id/fields/:fieldId/correct` | Record an officer manual correction on an extracted field |
-| `POST` | `/api/applications/:id/decision` | Record overall scrutiny verdict (`approved`, `rejected`, `clarification`) |
-| `GET` | `/api/audit-events` | Retrieve append-only audit trail events |
-| `POST` | `/api/reset` | Reset state to clean synthetic baseline cases |
-| `GET` | `/api/rules` | Fetch catalog of statutory regulatory rules |
-| `POST` | `/api/rules/test` | Execute interactive unit test for a rule |
+| Method | Canonical Endpoint | Role Required | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/login` | Public | Authenticate with institutional credentials & receive signed JWT |
+| `GET` | `/api/v1/auth/me` | Authenticated | Fetch active authenticated session details |
+| `GET` | `/api/v1/users` | Public | List available demo persona accounts |
+| `POST` | `/api/v1/user` | Public | Switch persona in demonstration mode |
+| `GET` | `/api/v1/domains` | Authenticated | List all registered regulatory domain packs (e.g., AICTE) |
+| `GET` | `/api/v1/domains/:id` | Authenticated | Retrieve complete schema, documents, and rules for a domain pack |
+| `POST` | `/api/v1/verification/pairwise` | Reviewer, Admin | Execute pairwise field mismatch classification with confidence scoring |
+| `GET` | `/api/v1/jobs/:id` | Authenticated | Poll status of asynchronous document extraction or verification jobs |
+| `GET` | `/api/v1/organizations` | Authenticated | List tenant organizations accessible to the user |
+| `GET` | `/api/v1/applications` | Authenticated | List all applications with filtering (`status`, `category`, `search`) |
+| `GET` | `/api/v1/applications/:id` | Authenticated | Fetch detailed application docket, documents, fields, and findings |
+| `POST` | `/api/v1/applications` | Authenticated | Create a new application intake record |
+| `POST` | `/api/v1/applications/:id/decision` | Reviewer, Admin | Record statutory determination (`Approved`, `Rejected`, `Clarification Required`) |
+| `POST` | `/api/v1/applications/:id/documents` | Authenticated | Upload PDF with magic-byte verification, store on disk, and trigger extraction |
+| `GET` | `/api/v1/applications/:id/documents/:docId/file` | Authenticated | Stream stored binary PDF file securely |
+| `DELETE` | `/api/v1/documents/:id` | Reviewer, Admin | Delete document from docket and re-evaluate rules |
+| `PATCH` | `/api/v1/fields/:id` | Reviewer, Admin | Record officer manual correction on extracted field with justification note |
+| `POST` | `/api/v1/applications/:id/validate` | Authenticated | Run deterministic statutory rules against docket fields |
+| `GET` | `/api/v1/rules` | Authenticated | Fetch catalog of statutory regulatory verification rules |
+| `PATCH` | `/api/v1/rules/:id` | Admin | Enable/disable regulatory rule |
+| `POST` | `/api/v1/rules/test` | Authenticated | Execute isolated sandbox rule test without mutating official decisions |
+| `POST` | `/api/v1/rules/:id/test` | Authenticated | Execute isolated sandbox rule test for a specific rule ID or key |
+| `GET` | `/api/v1/findings` | Authenticated | List all discrepancy and missing-evidence findings |
+| `POST` | `/api/v1/findings/:id/review` | Reviewer, Admin | Adjudicate finding (`Confirmed`, `Dismissed`, `Unable to Determine`, `Open`) |
+| `GET` | `/api/v1/applications/:id/report` | Authenticated | Generate complete institutional scrutiny report dossier |
+| `GET` | `/api/v1/audit` | Authenticated | Retrieve durable append-only audit trail ledger |
+| `GET` | `/api/v1/applications/:id/audit` | Authenticated | Retrieve audit events specific to an application docket |
+| `POST` | `/api/v1/applications/:id/deep-scrutiny` | Authenticated | Synthesize cross-document analysis using Gemini AI with strict guardrails |
+| `POST` | `/api/v1/reset-demo` | Admin | Reset SQLite database to verified baseline demonstration fixtures |
 
 ---
 
 ## 5. Development & Testing Commands
 
 ```bash
-# 1. Run the deterministic verification test suite
-npx tsx server/test-runner.ts
+# 1. Run all 17 automated regression & verification test suites
+npm test
 
-# 2. Type-check with TypeScript compiler
+# 2. Type-check with TypeScript compiler (Strict mode, zero errors)
 npm run lint
 
-# 3. Compile and build the production bundle
-npm run build
+# 3. Dry-run SQLite-to-PostgreSQL schema audit and ETL preview
+npx tsx infrastructure/db/migrate_sqlite_to_pg.ts --dry-run
 
-# 4. Start the development server on port 3000
+# 4. Launch full enterprise stack via Docker Compose (Node API, Python AI, PostgreSQL, Redis, MinIO)
+docker-compose -f infrastructure/docker-compose.yml up --build -d
+
+# 5. Evaluate Python AI Microservice synthetic baseline (FastAPI)
+curl -X GET http://localhost:8000/api/v1/evaluate-baseline
+
+# 6. Start the local full-stack development server on port 3000
 npm run dev
 ```
 
@@ -179,5 +202,8 @@ npm run dev
 ## 6. Architecture & Security Guarantees
 
 1. **Deterministic Verification Guarantee**: The extraction and rule-evaluation pipelines are 100% deterministic. All discrepancies are backed by exact clause text, page numbers, and bounding-box coordinates.
-2. **Audit Accountability**: Every manual override or finding dismissal requires an officer identifier, timestamp, and justification comment recorded to the append-only ledger.
-3. **No External Data Leakage**: Document parsing and verification are performed locally within the server runtime.
+2. **Domain-Independent Abstraction**: Zero hardcoded regulatory rules exist in the core engine. Verification behavior is driven declaratively by registered Domain Packs (`server/domains/`).
+3. **Five-Way Pairwise Classification & Abstention**: The pairwise comparison pipeline outputs `MATCH`, `MISMATCH`, `MISSING`, `UNCERTAIN`, or `NOT_COMPARABLE`. Low confidence (<0.85) triggers mandatory human review.
+4. **Audit Accountability**: Every manual override or finding dismissal requires an officer identifier, timestamp, and justification comment recorded to the append-only ledger.
+5. **No External Data Leakage**: Document parsing and verification are performed locally within the server runtime.
+6. **Detailed Documentation Portal**: Complete architectural guides, ADRs, database schemas, and API references are available in the [`docs/`](docs/README.md) directory and [`DEVELOPMENT_STATUS.md`](DEVELOPMENT_STATUS.md).
