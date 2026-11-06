@@ -51,7 +51,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const totalDocuments = applications.reduce((sum, a) => sum + (a.documentCount || 0), 0);
   const activeRulesCount = rules.filter((r) => r.enabled).length;
 
-  // Real 5-Class Pairwise Classification Metrics derived from findings and verification status
+  // Real 5-Class Pairwise Classification Metrics derived strictly from database findings and application records
   const mismatchCount = findings.filter(
     (f) => f.severity === 'Material Discrepancy' || f.status === 'Confirmed'
   ).length;
@@ -61,11 +61,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const uncertainCount = findings.filter(
     (f) => f.status === 'Unable to Determine' || f.explanation.toLowerCase().includes('ocr') || f.explanation.toLowerCase().includes('unreadable')
   ).length;
-  const matchCount = applications.reduce((sum, a) => {
-    const passed = Math.max(0, (rules.length || 6) - (a.totalFindingsCount || 0));
-    return sum + passed;
-  }, 0);
   const notComparableCount = findings.filter((f) => f.status === 'Dismissed').length;
+  const compliantAppsCount = applications.filter((a) => a.openFindingsCount === 0).length;
 
   const categories = [
     { name: 'Land & Tenancy', count: findings.filter((f) => f.category === 'Land & Tenancy').length },
@@ -76,7 +73,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   const topics = [
     { id: 'topic-kpis', label: '01 · Summary Metrics' },
-    { id: 'topic-scenarios', label: '02 · Verification Scenarios' },
+    { id: 'topic-scenarios', label: `02 · Active Scrutiny Dockets (${totalApps})` },
     { id: 'topic-applications', label: `03 · Applications (${totalApps})` },
     { id: 'topic-findings', label: `04 · Findings (${findings.length})` },
     { id: 'topic-rules', label: `05 · Active Rules (${activeRulesCount})` },
@@ -279,9 +276,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-[#065F46]" />
               </div>
               <div className="text-2xl font-semibold font-mono text-[#065F46] my-1.5 tabular-nums">
-                {matchCount}
+                {compliantAppsCount}
               </div>
-              <div className="text-[11px] text-[#047857]">Concordant claims</div>
+              <div className="text-[11px] text-[#047857]">Compliant dockets</div>
             </div>
 
             <div className="p-3.5 bg-[#FFF1F2] border border-[#FECDD3] rounded-lg">
@@ -306,15 +303,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div className="text-[11px] text-[#B45309]">Omitted documents</div>
             </div>
 
-            <div className="p-3.5 bg-[#EEF2FF] border border-[#C7D2FE] rounded-lg">
+            <div className="p-3.5 bg-[#FFF7ED] border border-[#FED7AA] rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-[#4F46E5]">UNCERTAIN</span>
-                <HelpCircle className="w-4 h-4 text-[#4F46E5]" />
+                <span className="text-xs font-semibold text-[#C2410C]">UNCERTAIN</span>
+                <HelpCircle className="w-4 h-4 text-[#C2410C]" />
               </div>
-              <div className="text-2xl font-semibold font-mono text-[#4F46E5] my-1.5 tabular-nums">
+              <div className="text-2xl font-semibold font-mono text-[#C2410C] my-1.5 tabular-nums">
                 {uncertainCount}
               </div>
-              <div className="text-[11px] text-[#4338CA]">Requires officer review</div>
+              <div className="text-[11px] text-[#9A3412]">Requires officer review</div>
             </div>
 
             <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg">
@@ -333,142 +330,99 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
       <hr className="border-[#E2E8F0]" />
 
-      {/* TOPIC 02: Benchmark Verification Scenarios */}
+      {/* TOPIC 02: Active Scrutiny Dockets */}
       <section id="topic-scenarios" className="scroll-mt-20 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
-            <span className="text-xs font-mono uppercase tracking-wider text-[#4F46E5] font-semibold">
+            <span className="text-xs font-mono uppercase tracking-wider text-[#0D9488] font-semibold">
               Topic 02
             </span>
-            <h2 className="text-lg font-semibold text-[#0F172A]">
-              Verification Scenarios
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Active Scrutiny Dockets
             </h2>
-            <p className="text-sm text-[#64748B] mt-0.5">
-              Three pre-configured institutional dockets demonstrating compliant, mismatched, and missing-evidence workflows.
+            <p className="text-xs text-[#64748B] mt-0.5">
+              Live institutional filings undergoing cross-document verification, pairwise classification, and human review.
             </p>
           </div>
           <button
             type="button"
             onClick={() => onNavigate('applications')}
-            className="px-3.5 py-2 text-xs font-semibold text-[#4F46E5] bg-[#EEF2FF] hover:bg-[#E0E7FF] rounded-md transition-colors inline-flex items-center gap-1.5 shrink-0"
+            className="px-3.5 py-2 text-xs font-semibold text-[#0D9488] bg-[#F0FDFA] hover:bg-[#CCFBF1] rounded-md transition-colors inline-flex items-center gap-1.5 shrink-0 border border-[#99F6E4]"
           >
-            <span>View All Applications</span>
+            <span>View All Applications ({totalApps})</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
-          {/* Scenario 1 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-EOA-1104
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded text-xs font-medium">
-                  Compliant
-                </span>
-              </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Kalyani Institute of Engineering
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                30-year registered lease deed aligns with declared 2054 expiry date and 7.50 Acres across all 4 statutory documents.
-              </p>
+        {applications.length === 0 ? (
+          <div className="p-8 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-[#F0FDFA] text-[#0D9488] flex items-center justify-center mx-auto border border-[#99F6E4]">
+              <FolderOpen className="w-6 h-6" />
             </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#065F46] font-semibold">
-                0 Open Findings
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('1104'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
-              >
-                <span>Inspect Docket</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <h3 className="text-base font-semibold text-[#0A2540]">
+              No Institutional Dockets Registered
+            </h3>
+            <p className="text-xs text-[#64748B] max-w-md mx-auto leading-relaxed">
+              The regional scrutiny database contains zero institutional applications. Ingest a new application docket to begin automated OCR extraction, statutory rules verification, and pairwise mismatch classification.
+            </p>
+            <button
+              type="button"
+              onClick={onOpenIntake}
+              className="mt-2 px-4 py-2 text-xs font-semibold text-white bg-[#0A2540] hover:bg-[#071A2E] rounded-md transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#0D9488]" />
+              <span>Register New Application</span>
+            </button>
           </div>
-
-          {/* Scenario 2 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-NTC-0842
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#FFF1F2] text-[#9F1239] border border-[#FECDD3] rounded text-xs font-medium">
-                  2 Discrepancies
-                </span>
-              </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Pragati Institute of Technology
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                Declared 2048 lease expiry conflicts with 2028 deed termination clause (page 3); campus land short by 2.30 Acres (page 4).
-              </p>
-            </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#E11D48] font-semibold">
-                2 Open Findings
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('0842'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+            {applications.slice(0, 3).map((app) => (
+              <div
+                key={app.id}
+                className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] hover:border-[#0D9488] rounded-lg flex flex-col justify-between gap-5 h-full transition-all shadow-2xs"
               >
-                <span>Inspect Discrepancies</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-semibold text-[#64748B]">
+                      {app.referenceNumber}
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded text-xs font-medium border ${
+                        app.openFindingsCount === 0
+                          ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                          : 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                      }`}
+                    >
+                      {app.openFindingsCount === 0
+                        ? 'Compliant'
+                        : `${app.openFindingsCount} Open Finding${app.openFindingsCount > 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-base text-[#0A2540]">
+                    {app.institutionName}
+                  </h3>
+                  <p className="text-[#64748B] text-xs leading-relaxed line-clamp-2">
+                    {app.declaredDetails?.address || `${app.applicationType} · ${app.declaredDetails?.landAreaAcres || 0} Acres declared.`}
+                  </p>
+                </div>
 
-          {/* Scenario 3 */}
-          <div className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-5 h-full">
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-semibold text-[#64748B]">
-                  APP-2026-EOA-0915
-                </span>
-                <span className="px-2.5 py-0.5 bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] rounded text-xs font-medium">
-                  Manual Review
-                </span>
+                <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                  <span className="font-mono tabular-nums text-[#64748B]">
+                    {app.documentCount} Document{app.documentCount !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSelectApplication(app)}
+                    className="font-semibold text-[#0D9488] hover:text-[#0F766E] inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Inspect Docket</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <h3 className="font-semibold text-base text-[#0F172A]">
-                Vidyapeeth Academy of Pharmacy
-              </h3>
-              <p className="text-[#64748B] text-sm leading-relaxed">
-                Fire Safety NOC missing from submission; Building Safety Certificate is an unindexed bitmap scan requiring officer review.
-              </p>
-            </div>
-
-            <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-mono tabular-nums text-[#D97706] font-semibold">
-                2 Flagged Items
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  const app = applications.find((a) => a.referenceNumber.includes('0915'));
-                  if (app) onSelectApplication(app);
-                }}
-                className="text-xs font-semibold text-[#4F46E5] hover:text-[#4338CA] inline-flex items-center gap-1"
-              >
-                <span>Inspect Docket</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            ))}
           </div>
-        </div>
+        )}
       </section>
 
       <hr className="border-[#E2E8F0]" />

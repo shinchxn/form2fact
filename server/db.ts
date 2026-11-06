@@ -208,11 +208,19 @@ export class ScrutinyDatabase {
   }
 
   seedDefaultData(forceReset = false) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const seedDemoDisabled = process.env.SEED_DEMO_DATA === 'false';
     const existingAppsCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM applications').get() as any)?.count || 0);
-    const existingUser4 = this.db.prepare("SELECT id FROM users WHERE id = 'usr-004'").get();
+    const existingRulesCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM rules').get() as any)?.count || 0);
+    const existingUsersCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0);
 
-    if (existingAppsCount > 0 && existingUser4 && !forceReset) {
-      return;
+    if (!forceReset) {
+      if (isProduction && existingRulesCount > 0 && existingUsersCount > 0) {
+        return;
+      }
+      if (!isProduction && existingAppsCount > 0 && existingUsersCount > 0) {
+        return;
+      }
     }
 
     // Clear all existing data inside transaction
@@ -301,7 +309,12 @@ export class ScrutinyDatabase {
       );
     }
 
-    // 3. Seed Demo Applications
+    // 3. Seed Demo Applications (strictly disabled in production or when SEED_DEMO_DATA=false)
+    if (isProduction || seedDemoDisabled) {
+      console.log('[INFO] Production or clean data mode active: skipping demo application fixtures.');
+      return;
+    }
+
     // App 1: Compliant
     const app1Id = 'app-1104';
     const app1: Application = {
