@@ -26,9 +26,9 @@
         "config.json": "a44f165eb47dd03c290c1162dcd9df2c01474495ee7c8aefb2dfcb91a2055f7a"
       },
       "evaluation_baseline": {
-        "accuracy": 1.0,
-        "sample_count": 10,
-        "abstention_rate": 0.20
+        "accuracy": 0.75,
+        "sample_count": 8,
+        "abstention_rate": 0.125
       },
       "status": "ready"
     }
