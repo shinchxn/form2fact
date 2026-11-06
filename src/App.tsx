@@ -13,6 +13,7 @@ import { SettingsView } from './components/SettingsView.tsx';
 import { NewApplicationModal } from './components/NewApplicationModal.tsx';
 import { CorrectionModal } from './components/CorrectionModal.tsx';
 import { ReviewActionModal } from './components/ReviewActionModal.tsx';
+import { ErrorBoundary } from './shared/components/ErrorBoundary.tsx';
 
 import {
   Application,
@@ -31,7 +32,8 @@ import {
   fetchAuditEvents,
   fetchRules,
   fetchCurrentUser,
-  resetDemoData
+  resetDemoData,
+  ensureAuthToken
 } from './services/api.ts';
 
 export default function App() {
@@ -76,6 +78,7 @@ export default function App() {
   // Load initial global data
   const loadGlobalData = async () => {
     try {
+      await ensureAuthToken();
       const [appsData, findingsData, auditsData, rulesData, userData] = await Promise.all([
         fetchApplications(),
         fetchFindings(),
@@ -202,7 +205,7 @@ export default function App() {
               Loading workspace...
             </div>
           ) : (
-            <>
+            <ErrorBoundary>
               {currentView === 'overview' && (
                 <OverviewView
                   applications={applications}
@@ -311,7 +314,7 @@ export default function App() {
                   isResetting={isResetting}
                 />
               )}
-            </>
+            </ErrorBoundary>
           )}
         </main>
       </div>

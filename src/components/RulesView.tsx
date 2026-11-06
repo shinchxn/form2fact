@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Play, RotateCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Rule } from '../types/index.ts';
-import { updateRule } from '../services/api.ts';
+import { updateRule, testRuleSandbox } from '../services/api.ts';
 
 interface RulesViewProps {
   rules: Rule[];
@@ -12,6 +12,9 @@ export const RulesView: React.FC<RulesViewProps> = ({ rules, onRefreshRules }) =
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sandboxResults, setSandboxResults] = useState<
+    Record<string, { status: string; explanation: string; loading: boolean }>
+  >({});
 
   const domainPills = [
     { id: 'all', label: 'All Domains', count: rules.length },
@@ -36,6 +39,45 @@ export const RulesView: React.FC<RulesViewProps> = ({ rules, onRefreshRules }) =
       count: rules.filter((r) => r.category === 'Approvals & Capacity').length
     }
   ];
+
+  const handleRunTestCase = async (ruleKey: string, tc: any, key: string) => {
+    setSandboxResults((prev) => ({
+      ...prev,
+      [key]: { status: '', explanation: '', loading: true }
+    }));
+    try {
+      let parcels: { documentName: string; areaAcres: number }[] | undefined;
+      if (tc.title.toLowerCase().includes('multi-parcel')) {
+        parcels = [
+          { documentName: 'Parcel 1 Lease Deed (Sy 42/1)', areaAcres: 4.0 },
+          { documentName: 'Parcel 2 Title Deed (Sy 42/2)', areaAcres: 3.5 }
+        ];
+      }
+      const res = await testRuleSandbox(ruleKey, {
+        declaredValue: tc.declared,
+        evidenceValue: tc.evidence,
+        parcels
+      });
+      setSandboxResults((prev) => ({
+        ...prev,
+        [key]: { status: res.status, explanation: res.explanation, loading: false }
+      }));
+    } catch (err: any) {
+      setSandboxResults((prev) => ({
+        ...prev,
+        [key]: { status: 'Error', explanation: err.message || 'Sandbox execution failed', loading: false }
+      }));
+    }
+  };
+
+  const handleRunAllRuleTests = async (rule: Rule) => {
+    if (!rule.testCases) return;
+    for (let idx = 0; idx < rule.testCases.length; idx++) {
+      const tc = rule.testCases[idx];
+      const key = `${rule.id}_${idx}`;
+      await handleRunTestCase(rule.ruleKey, tc, key);
+    }
+  };
 
   const handleToggle = async (rule: Rule) => {
     setUpdatingId(rule.id);
@@ -196,36 +238,95 @@ export const RulesView: React.FC<RulesViewProps> = ({ rules, onRefreshRules }) =
             {/* Unit Test Cases */}
             {rule.testCases && rule.testCases.length > 0 && (
               <div className="p-6 border-t border-[#E2E8F0] space-y-3 text-xs">
-                <div className="font-semibold text-[#64748B] flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-[#4F46E5]" />
-                  <span>Unit Test Assertions ({rule.testCases.length})</span>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-[#64748B] flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#4F46E5]" />
+                    <span>Unit Test Assertions ({rule.testCases.length})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRunAllRuleTests(rule)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-[#4F46E5] hover:text-[#4338CA] bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] rounded transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Run Sandbox Suite</span>
+                  </button>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-                  {rule.testCases.map((tc, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md flex flex-col justify-between gap-2 h-full"
-                    >
-                      <div className="flex items-center justify-between gap-2 font-semibold text-[#0F172A]">
-                        <span className="truncate">{tc.title}</span>
-                        <span
-                          className={`text-xs font-mono px-2.5 py-0.5 rounded font-medium border shrink-0 ${
-                            tc.expectedOutcome === 'Pass'
-                              ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                              : tc.expectedOutcome === 'Discrepancy'
-                              ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                              : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
-                          }`}
+                  {rule.testCases.map((tc, idx) => {
+                    const resultKey = `${rule.id}_${idx}`;
+                    const res = sandboxResults[resultKey];
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md flex flex-col justify-between gap-3 h-full"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2 font-semibold text-[#0F172A] mb-1.5">
+                            <span className="line-clamp-2 leading-snug">{tc.title}</span>
+                            <span
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded font-medium border shrink-0 ${
+                                tc.expectedOutcome === 'Pass'
+                                  ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                                  : tc.expectedOutcome === 'Discrepancy'
+                                  ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                                  : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
+                              }`}
+                            >
+                              Exp: {tc.expectedOutcome}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-[#64748B] font-mono space-y-1">
+                            <div className="truncate"><span className="text-[#94A3B8]">Declared:</span> {tc.declared}</div>
+                            <div className="truncate"><span className="text-[#94A3B8]">Evidence:</span> {tc.evidence}</div>
+                          </div>
+                        </div>
+
+                        {/* Real-time Sandbox Execution Result */}
+                        {res && !res.loading && (
+                          <div className="p-2.5 rounded bg-white border border-[#E2E8F0] space-y-1 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-[#64748B]">Sandbox Verdict:</span>
+                              <span
+                                className={`font-mono px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                  res.status === 'Pass'
+                                    ? 'bg-[#ECFDF5] text-[#065F46]'
+                                    : res.status === 'Discrepancy'
+                                    ? 'bg-[#FFF1F2] text-[#9F1239]'
+                                    : 'bg-[#F1F5F9] text-[#475569]'
+                                }`}
+                              >
+                                {res.status}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-[#475569] leading-snug">{res.explanation}</p>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleRunTestCase(rule.ruleKey, tc, resultKey)}
+                          disabled={res?.loading}
+                          className="w-full mt-1 px-2.5 py-1 text-xs font-medium text-[#0F172A] bg-[#FFFFFF] hover:bg-[#F1F5F9] border border-[#CBD5E1] rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
-                          {tc.expectedOutcome}
-                        </span>
+                          {res?.loading ? (
+                            <>
+                              <RotateCw className="w-3 h-3 animate-spin text-[#4F46E5]" />
+                              <span>Evaluating Sandbox...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 text-[#4F46E5] fill-current" />
+                              <span>{res ? 'Re-run Sandbox' : 'Run Sandbox Test'}</span>
+                            </>
+                          )}
+                        </button>
                       </div>
-                      <div className="text-xs text-[#64748B] font-mono space-y-1">
-                        <div>Declared: {tc.declared}</div>
-                        <div>Evidence: {tc.evidence}</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

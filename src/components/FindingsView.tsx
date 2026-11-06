@@ -5,6 +5,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Finding, Application } from '../types/index.ts';
+import { StatusBadge } from '../shared/components/StatusBadge.tsx';
 
 interface FindingsViewProps {
   findings: Finding[];
@@ -203,17 +204,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                     >
                       {finding.severity}
                     </span>
-                    <span
-                      className={`px-2.5 py-0.5 text-xs font-medium rounded border ${
-                        finding.status === 'Confirmed'
-                          ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                          : finding.status === 'Dismissed'
-                          ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                          : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#0F172A]'
-                      }`}
-                    >
-                      {finding.status}
-                    </span>
+                    <StatusBadge status={finding.status} size="sm" />
                   </div>
                 </div>
 

@@ -2,13 +2,60 @@ import { Application, DocumentRecord, ExtractedField, Finding, ReviewAction, Aud
 
 const API_BASE = '/api/v1';
 
+let authToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('f2f_token') : null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+  if (typeof window !== 'undefined') {
+    if (token) localStorage.setItem('f2f_token', token);
+    else localStorage.removeItem('f2f_token');
+  }
+}
+
+export function getAuthToken(): string | null {
+  return authToken || (typeof window !== 'undefined' ? localStorage.getItem('f2f_token') : null);
+}
+
+export async function ensureAuthToken(): Promise<string> {
+  const current = getAuthToken();
+  if (current) {
+    authToken = current;
+    return current;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'usr-001' })
+    });
+    const json = await res.json();
+    if (json.success && json.token) {
+      setAuthToken(json.token);
+      return json.token;
+    }
+  } catch (err) {
+    console.warn('Auto auth bootstrap error:', err);
+  }
+  return '';
+}
+
+function getHeaders(contentType: string = 'application/json'): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (contentType) headers['Content-Type'] = contentType;
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
 export async function fetchApplications(params?: { search?: string; status?: string; category?: string }): Promise<Application[]> {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.status) query.set('status', params.status);
   if (params?.category) query.set('category', params.category);
 
-  const res = await fetch(`${API_BASE}/applications?${query.toString()}`);
+  const res = await fetch(`${API_BASE}/applications?${query.toString()}`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   return json.data || [];
 }
@@ -19,7 +66,9 @@ export async function fetchApplicationById(id: string): Promise<{
   findings: Finding[];
   extractedFields: ExtractedField[];
 }> {
-  const res = await fetch(`${API_BASE}/applications/${id}`);
+  const res = await fetch(`${API_BASE}/applications/${id}`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to fetch application');
   return {
@@ -33,7 +82,7 @@ export async function fetchApplicationById(id: string): Promise<{
 export async function createApplication(data: Partial<Application>): Promise<Application> {
   const res = await fetch(`${API_BASE}/applications`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(data)
   });
   const json = await res.json();
@@ -46,8 +95,12 @@ export async function uploadDocument(applicationId: string, file: File, document
   formData.append('file', file);
   formData.append('documentType', documentType);
 
+  const headers: Record<string, string> = {};
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
   const res = await fetch(`${API_BASE}/applications/${applicationId}/documents`, {
     method: 'POST',
+    headers,
     body: formData
   });
   const json = await res.json();
@@ -57,7 +110,8 @@ export async function uploadDocument(applicationId: string, file: File, document
 
 export async function deleteDocument(documentId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to delete document');
@@ -66,7 +120,7 @@ export async function deleteDocument(documentId: string): Promise<void> {
 export async function correctField(fieldId: string, correctedValue: string, note: string): Promise<ExtractedField> {
   const res = await fetch(`${API_BASE}/fields/${fieldId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ correctedValue, note })
   });
   const json = await res.json();
@@ -76,7 +130,8 @@ export async function correctField(fieldId: string, correctedValue: string, note
 
 export async function runValidation(applicationId: string) {
   const res = await fetch(`${API_BASE}/applications/${applicationId}/validate`, {
-    method: 'POST'
+    method: 'POST',
+    headers: getHeaders()
   });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to validate application');
@@ -89,7 +144,9 @@ export async function fetchFindings(params?: { status?: string; category?: strin
   if (params?.category) query.set('category', params.category);
   if (params?.severity) query.set('severity', params.severity);
 
-  const res = await fetch(`${API_BASE}/findings?${query.toString()}`);
+  const res = await fetch(`${API_BASE}/findings?${query.toString()}`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   return json.data || [];
 }
@@ -102,7 +159,7 @@ export async function submitReviewAction(
 ): Promise<Finding> {
   const res = await fetch(`${API_BASE}/findings/${findingId}/review`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ action, newStatus, note })
   });
   const json = await res.json();
@@ -110,21 +167,42 @@ export async function submitReviewAction(
   return json.data;
 }
 
+export async function recordApplicationDecision(
+  applicationId: string,
+  decisionType: 'Approved' | 'Rejected' | 'Clarification Required',
+  rationale: string
+): Promise<{ decisionId: string; application: Application }> {
+  const res = await fetch(`${API_BASE}/applications/${applicationId}/decision`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ decisionType, rationale })
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to record application decision');
+  return json.data;
+}
+
 export async function fetchReport(applicationId: string): Promise<ScrutinyReportData> {
-  const res = await fetch(`${API_BASE}/applications/${applicationId}/report`);
+  const res = await fetch(`${API_BASE}/applications/${applicationId}/report`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Failed to fetch report');
   return json.data;
 }
 
 export async function fetchAuditEvents(): Promise<AuditEvent[]> {
-  const res = await fetch(`${API_BASE}/audit`);
+  const res = await fetch(`${API_BASE}/audit`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   return json.data || [];
 }
 
 export async function fetchRules(): Promise<Rule[]> {
-  const res = await fetch(`${API_BASE}/rules`);
+  const res = await fetch(`${API_BASE}/rules`, {
+    headers: getHeaders()
+  });
   const json = await res.json();
   return json.data || [];
 }
@@ -132,7 +210,7 @@ export async function fetchRules(): Promise<Rule[]> {
 export async function updateRule(ruleId: string, updates: Partial<Rule>): Promise<Rule> {
   const res = await fetch(`${API_BASE}/rules/${ruleId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(updates)
   });
   const json = await res.json();
@@ -140,24 +218,55 @@ export async function updateRule(ruleId: string, updates: Partial<Rule>): Promis
   return json.data;
 }
 
-export async function fetchCurrentUser(): Promise<User> {
-  const res = await fetch(`${API_BASE}/user`);
+export async function testRuleSandbox(
+  ruleKeyOrId: string,
+  testInputs: {
+    declaredValue?: string;
+    evidenceValue?: string;
+    documentType?: string;
+    applicationCategory?: string;
+    evaluationYear?: number;
+    parcels?: { documentName: string; areaAcres: number }[];
+  }
+): Promise<{ status: 'Pass' | 'Discrepancy' | 'Missing' | 'Unable to Determine'; explanation: string }> {
+  const res = await fetch(`${API_BASE}/rules/${ruleKeyOrId}/test`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(testInputs)
+  });
   const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to execute rule sandbox test');
   return json.data;
+}
+
+export async function fetchCurrentUser(): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  return json.user || json.data;
 }
 
 export async function switchCurrentUser(user: User): Promise<User> {
   const res = await fetch(`${API_BASE}/user`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(user)
   });
   const json = await res.json();
+  if (json.token) {
+    setAuthToken(json.token);
+  }
   return json.data;
 }
 
 export async function resetDemoData(): Promise<void> {
-  await fetch(`${API_BASE}/reset-demo`, { method: 'POST' });
+  const res = await fetch(`${API_BASE}/reset-demo`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to reset demo data');
 }
 
 export interface DeepScrutinyMemo {
@@ -174,7 +283,7 @@ export interface DeepScrutinyMemo {
 export async function runDeepScrutiny(applicationId: string, query?: string): Promise<DeepScrutinyMemo> {
   const res = await fetch(`${API_BASE}/applications/${applicationId}/deep-scrutiny`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ query })
   });
   const json = await res.json();

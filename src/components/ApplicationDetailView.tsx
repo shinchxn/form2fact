@@ -10,11 +10,15 @@ import {
   CheckCircle,
   ExternalLink,
   Cpu,
-  ArrowRight
+  ArrowRight,
+  Scale
 } from 'lucide-react';
 import { Application, DocumentRecord, ExtractedField, Finding, AuditEvent } from '../types/index.ts';
 import { runValidation, deleteDocument, uploadDocument, runDeepScrutiny, DeepScrutinyMemo } from '../services/api.ts';
+import { ApplicationDecisionModal } from './ApplicationDecisionModal.tsx';
 import { ViewType } from './Sidebar.tsx';
+import { StatusBadge } from '../shared/components/StatusBadge.tsx';
+import { PairwiseComparator } from '../features/verification/PairwiseComparator.tsx';
 
 interface ApplicationDetailViewProps {
   application: Application;
@@ -47,6 +51,7 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'findings' | 'comparator' | 'documents' | 'audit'>('all');
   const [isValidating, setIsValidating] = useState(false);
+  const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deepScrutinyMemo, setDeepScrutinyMemo] = useState<DeepScrutinyMemo | null>(null);
   const [isRunningDeepScrutiny, setIsRunningDeepScrutiny] = useState(false);
@@ -174,10 +179,19 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
           <button
             type="button"
             onClick={onOpenReport}
-            className="px-4 py-2 text-xs font-medium text-white bg-[#4F46E5] hover:bg-[#4338CA] rounded-md transition-colors flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+            className="px-4 py-2 text-xs font-medium text-white bg-[#4F46E5] hover:bg-[#4338CA] rounded-md transition-colors flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Export Dossier</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsDecisionModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-medium text-white bg-[#0F172A] hover:bg-[#1E293B] rounded-md transition-colors flex items-center gap-1.5 shadow-2xs whitespace-nowrap cursor-pointer"
+          >
+            <Scale className="w-4 h-4 text-[#A5B4FC]" />
+            <span>Adjudicate Docket</span>
           </button>
         </div>
       </div>
@@ -218,6 +232,20 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Recorded Statutory Determination Strip */}
+        {application.reviewerNotes && application.reviewerNotes.includes('[Decision:') && (
+          <div className="px-6 py-3 bg-[#EEF2FF]/60 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Scale className="w-4 h-4 text-[#4F46E5] shrink-0" />
+              <span className="font-semibold text-[#0F172A]">Formal Determination:</span>
+              <span className="text-[#334155]">{application.reviewerNotes}</span>
+            </div>
+            <span className="text-[11px] text-[#64748B] font-mono shrink-0">
+              Recorded: {new Date(application.updatedAt).toLocaleDateString()}
+            </span>
+          </div>
+        )}
 
         {/* Declared Parameters Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0] bg-[#F8FAFC]/60 text-sm">
@@ -531,17 +559,7 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
                       >
                         {finding.severity}
                       </span>
-                      <span
-                        className={`px-2.5 py-0.5 text-xs font-medium rounded border ${
-                          finding.status === 'Confirmed'
-                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                            : finding.status === 'Dismissed'
-                            ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                            : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#0F172A]'
-                        }`}
-                      >
-                        {finding.status}
-                      </span>
+                      <StatusBadge status={finding.status} size="sm" />
                     </div>
                   </div>
 
@@ -643,6 +661,9 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Interactive Pairwise Field Mismatch Classifier */}
+          <PairwiseComparator />
 
           <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
@@ -905,6 +926,14 @@ export const ApplicationDetailView: React.FC<ApplicationDetailViewProps> = ({
           </div>
         </section>
       )}
+
+      {/* Official Docket Adjudication Modal */}
+      <ApplicationDecisionModal
+        application={application}
+        isOpen={isDecisionModalOpen}
+        onClose={() => setIsDecisionModalOpen(false)}
+        onSuccess={() => onRefreshData()}
+      />
     </div>
   );
 };
