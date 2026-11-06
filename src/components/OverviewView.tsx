@@ -467,72 +467,80 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0] text-sm">
-                {applications.slice(0, 5).map((app) => (
-                  <tr
-                    key={app.id}
-                    onClick={() => onSelectApplication(app)}
-                    className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
-                  >
-                    <td className="py-4 px-5 font-mono text-xs font-semibold text-[#0F172A] whitespace-nowrap truncate">
-                      {app.referenceNumber}
-                    </td>
-                    <td className="py-4 px-5">
-                      <div className="font-semibold text-[#0F172A] truncate">
-                        {app.institutionName}
-                      </div>
-                      <div className="text-xs text-[#64748B] truncate mt-0.5">
-                        {app.declaredDetails.address}
-                      </div>
-                    </td>
-                    <td className="py-4 px-5 text-xs text-[#64748B] whitespace-nowrap truncate">
-                      {app.applicationType}
-                    </td>
-                    <td className="py-4 px-5 text-right font-mono text-xs text-[#0F172A] whitespace-nowrap tabular-nums">
-                      <div className="font-semibold">{app.declaredDetails.landAreaAcres} Acres</div>
-                      <div className="text-[#64748B] mt-0.5">Exp: {app.declaredDetails.leaseExpiryDate}</div>
-                    </td>
-                    <td className="py-4 px-5 text-right font-mono text-xs tabular-nums font-medium text-[#0F172A]">
-                      {app.documentCount}
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      {app.openFindingsCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums font-medium text-[#9F1239] bg-[#FFF1F2] border border-[#FECDD3] px-2.5 py-0.5 rounded text-xs">
-                          {app.openFindingsCount} Open
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 rounded text-xs">
-                          0
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 text-xs font-medium rounded border ${
-                          app.reviewStatus === 'Review Completed'
-                            ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
-                            : app.reviewStatus === 'Discrepancies Confirmed'
-                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                            : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
-                        }`}
-                      >
-                        {app.reviewStatus}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectApplication(app);
-                        }}
-                        className="px-3 py-1.5 text-xs font-semibold text-[#4F46E5] hover:bg-[#EEF2FF] rounded-md transition-colors inline-flex items-center gap-1"
-                      >
-                        <span>Open</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                {applications.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-[#64748B]">
+                      No institutional applications registered in this queue. Ingest a new docket to initiate statutory review.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  applications.slice(0, 5).map((app) => (
+                    <tr
+                      key={app.id}
+                      onClick={() => onSelectApplication(app)}
+                      className="hover:bg-[#F8FAFC] cursor-pointer transition-colors"
+                    >
+                      <td className="py-4 px-5 font-mono text-xs font-semibold text-[#0F172A] whitespace-nowrap truncate">
+                        {app.referenceNumber}
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="font-semibold text-[#0F172A] truncate">
+                          {app.institutionName}
+                        </div>
+                        <div className="text-xs text-[#64748B] truncate mt-0.5">
+                          {app.declaredDetails.address}
+                        </div>
+                      </td>
+                      <td className="py-4 px-5 text-xs text-[#64748B] whitespace-nowrap truncate">
+                        {app.applicationType}
+                      </td>
+                      <td className="py-4 px-5 text-right font-mono text-xs text-[#0F172A] whitespace-nowrap tabular-nums">
+                        <div className="font-semibold">{app.declaredDetails.landAreaAcres} Acres</div>
+                        <div className="text-[#64748B] mt-0.5">Exp: {app.declaredDetails.leaseExpiryDate}</div>
+                      </td>
+                      <td className="py-4 px-5 text-right font-mono text-xs tabular-nums font-medium text-[#0F172A]">
+                        {app.documentCount}
+                      </td>
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
+                        {app.openFindingsCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums font-medium text-[#9F1239] bg-[#FFF1F2] border border-[#FECDD3] px-2.5 py-0.5 rounded text-xs">
+                            {app.openFindingsCount} Open
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 rounded text-xs">
+                            0
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-5 whitespace-nowrap">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 text-xs font-medium rounded border ${
+                            app.reviewStatus === 'Review Completed'
+                              ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                              : app.reviewStatus === 'Discrepancies Confirmed'
+                              ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                              : 'bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
+                          }`}
+                        >
+                          {app.reviewStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectApplication(app);
+                          }}
+                          className="px-3 py-1.5 text-xs font-semibold text-[#0D9488] hover:bg-[#F0FDFA] rounded-md transition-colors inline-flex items-center gap-1"
+                        >
+                          <span>Open</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -583,84 +591,94 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
 
         {/* Top Findings Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
-          {findings.slice(0, 4).map((finding) => {
-            const app = applications.find((a) => a.id === finding.applicationId);
-            return (
-              <div
-                key={finding.id}
-                className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-4 h-full"
-              >
-                <div className="space-y-3.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-mono text-[#64748B]">
-                        <span className="font-semibold text-[#0F172A]">{finding.reference}</span>
-                        <span>·</span>
-                        <span className="text-[#4F46E5] font-medium">
-                          {finding.ruleKey} {finding.ruleVersion}
-                        </span>
+        {findings.length === 0 ? (
+          <div className="p-8 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg text-center space-y-2">
+            <CheckCircle2 className="w-8 h-8 text-[#0D9488] mx-auto" />
+            <h3 className="text-sm font-semibold text-[#0A2540]">Zero Regulatory Findings Detected</h3>
+            <p className="text-xs text-[#64748B]">
+              All evaluated parameters are concordant, or no active dockets have raised discrepancy alerts.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+            {findings.slice(0, 4).map((finding) => {
+              const app = applications.find((a) => a.id === finding.applicationId);
+              return (
+                <div
+                  key={finding.id}
+                  className="p-5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg flex flex-col justify-between gap-4 h-full"
+                >
+                  <div className="space-y-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-mono text-[#64748B]">
+                          <span className="font-semibold text-[#0F172A]">{finding.reference}</span>
+                          <span>·</span>
+                          <span className="text-[#0D9488] font-medium">
+                            {finding.ruleKey} {finding.ruleVersion}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-base text-[#0F172A] mt-1">
+                          {finding.title}
+                        </h3>
+                        <div className="text-xs text-[#64748B] mt-0.5">
+                          {app?.institutionName} ({app?.referenceNumber})
+                        </div>
                       </div>
-                      <h3 className="font-semibold text-base text-[#0F172A] mt-1">
-                        {finding.title}
-                      </h3>
-                      <div className="text-xs text-[#64748B] mt-0.5">
-                        {app?.institutionName} ({app?.referenceNumber})
+                      <span
+                        className={`px-2.5 py-0.5 text-xs font-medium rounded border shrink-0 ${
+                          finding.severity === 'Material Discrepancy'
+                            ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
+                            : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
+                        }`}
+                      >
+                        {finding.severity}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs items-stretch">
+                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
+                        <div className="text-[#64748B] font-medium">Declared Claim</div>
+                        <div className="font-mono font-semibold text-[#0F172A] mt-1 truncate">
+                          {finding.declaredValue || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
+                        <div className="text-[#64748B] font-medium">Document Evidence</div>
+                        <div className="font-mono font-semibold text-[#E11D48] mt-1 truncate">
+                          {finding.evidenceValue || 'Missing'}
+                        </div>
                       </div>
                     </div>
-                    <span
-                      className={`px-2.5 py-0.5 text-xs font-medium rounded border shrink-0 ${
-                        finding.severity === 'Material Discrepancy'
-                          ? 'bg-[#FFF1F2] text-[#9F1239] border-[#FECDD3]'
-                          : 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
-                      }`}
-                    >
-                      {finding.severity}
-                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-xs items-stretch">
-                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
-                      <div className="text-[#64748B] font-medium">Declared Claim</div>
-                      <div className="font-mono font-semibold text-[#0F172A] mt-1 truncate">
-                        {finding.declaredValue || 'N/A'}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex flex-col justify-between">
-                      <div className="text-[#64748B] font-medium">Document Evidence</div>
-                      <div className="font-mono font-semibold text-[#E11D48] mt-1 truncate">
-                        {finding.evidenceValue || 'Missing'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#64748B]">Status: {finding.status}</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onOpenReviewAction(finding)}
-                      className="font-semibold text-[#4F46E5] hover:text-[#4338CA]"
-                    >
-                      Record Decision
-                    </button>
-                    {app && (
+                  <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                    <span className="font-medium text-[#64748B]">Status: {finding.status}</span>
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => onSelectApplication(app)}
-                        className="font-medium text-[#64748B] hover:text-[#0F172A] inline-flex items-center gap-1"
+                        onClick={() => onOpenReviewAction(finding)}
+                        className="font-semibold text-[#0D9488] hover:text-[#0B7A6F]"
                       >
-                        <span>Open Docket</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        Record Decision
                       </button>
-                    )}
+                      {app && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectApplication(app)}
+                          className="font-medium text-[#64748B] hover:text-[#0F172A] inline-flex items-center gap-1"
+                        >
+                          <span>Open Docket</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <hr className="border-[#E2E8F0]" />
@@ -764,30 +782,39 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0] text-sm">
-                {auditEvents.slice(0, 5).map((e) => (
-                  <tr key={e.id} className="hover:bg-[#F8FAFC]">
-                    <td className="py-4 px-5 font-mono tabular-nums text-xs text-[#64748B] whitespace-nowrap">
-                      {new Date(e.timestamp).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </td>
-                    <td className="py-4 px-5 font-semibold text-[#0F172A] whitespace-nowrap truncate">
-                      {e.action}
-                    </td>
-                    <td className="py-4 px-5 text-[#0F172A] whitespace-nowrap truncate">
-                      {e.actorName}
-                    </td>
-                    <td className="py-4 px-5 font-mono text-xs font-medium text-[#4F46E5] whitespace-nowrap truncate">
-                      {e.entityReference}
-                    </td>
-                    <td className="py-4 px-5 text-xs text-[#64748B] truncate">
-                      {e.note || '—'}
+                {auditEvents.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-[#64748B]">
+                      No audit ledger events recorded yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  auditEvents.slice(0, 5).map((e) => (
+                    <tr key={e.id} className="hover:bg-[#F8FAFC]">
+                      <td className="py-4 px-5 font-mono tabular-nums text-xs text-[#64748B] whitespace-nowrap">
+                        {new Date(e.timestamp).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
+                      </td>
+                      <td className="py-4 px-5 font-semibold text-[#0F172A] whitespace-nowrap truncate">
+                        {e.action}
+                      </td>
+                      <td className="py-4 px-5 text-[#0F172A] whitespace-nowrap truncate">
+                        {e.actorName}
+                      </td>
+                      <td className="py-4 px-5 font-mono text-xs font-medium text-[#0D9488] whitespace-nowrap truncate">
+                        {e.entityReference}
+                      </td>
+                      <td className="py-4 px-5 text-xs text-[#64748B] truncate">
+                        {e.note || '—'}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

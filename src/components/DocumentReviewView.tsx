@@ -269,13 +269,24 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
         {/* PANE 2: Central Document Sheet Viewer */}
         <div className="flex-1 bg-[#F1F5F9] p-8 pb-24 flex justify-center items-start overflow-x-auto min-h-[calc(100vh-7.5rem)]">
-          <div
-            style={{
-              transform: `scale(${zoomLevel / 100})`,
-              transformOrigin: 'top center'
-            }}
-            className="w-full max-w-[780px] min-h-[880px] bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs rounded-sm p-12 transition-transform duration-150 relative text-left"
-          >
+          {documents.length === 0 ? (
+            <div className="w-full max-w-[780px] bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs rounded-lg p-16 text-center space-y-3 my-12">
+              <div className="w-12 h-12 rounded-full bg-[#F0FDFA] text-[#0D9488] flex items-center justify-center mx-auto border border-[#99F6E4]">
+                <FileSearch className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-semibold text-[#0A2540]">No Supporting Evidence Uploaded</h3>
+              <p className="text-xs text-[#64748B] max-w-md mx-auto">
+                This application docket currently contains no uploaded PDF documents. Upload registered lease deeds, safety certificates, or approval orders to inspect extracted fields and page citations.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                transform: `scale(${zoomLevel / 100})`,
+                transformOrigin: 'top center'
+              }}
+              className="w-full max-w-[780px] min-h-[880px] bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs rounded-sm p-12 transition-transform duration-150 relative text-left"
+            >
             {/* Document Header */}
             <div className="border-b border-[#E2E8F0] pb-4 mb-6 flex justify-between items-start select-none">
               <div>
@@ -359,9 +370,10 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
             {/* Bottom Sheet Footer */}
             <div className="pt-4 border-t border-[#E2E8F0] flex justify-between text-xs text-[#64748B] font-mono tabular-nums">
               <span>Form2Fact Parser v1.2</span>
-              <span>SHA-256: {activeDoc?.checksum.slice(0, 18)}...</span>
+              <span>SHA-256: {activeDoc?.checksum ? `${activeDoc.checksum.slice(0, 18)}...` : 'N/A'}</span>
             </div>
           </div>
+          )}
         </div>
 
         {/* PANE 3: Sticky Evidence Inspector */}
