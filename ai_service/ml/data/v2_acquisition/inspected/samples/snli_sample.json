@@ -1,0 +1,52 @@
+[
+  {
+    "premise": "A person on a horse jumps over a broken down airplane.",
+    "hypothesis": "A person is training his horse for a competition.",
+    "label": 1
+  },
+  {
+    "premise": "A person on a horse jumps over a broken down airplane.",
+    "hypothesis": "A person is at a diner, ordering an omelette.",
+    "label": 2
+  },
+  {
+    "premise": "A person on a horse jumps over a broken down airplane.",
+    "hypothesis": "A person is outdoors, on a horse.",
+    "label": 0
+  },
+  {
+    "premise": "Children smiling and waving at camera",
+    "hypothesis": "They are smiling at their parents",
+    "label": 1
+  },
+  {
+    "premise": "Children smiling and waving at camera",
+    "hypothesis": "There are children present",
+    "label": 0
+  },
+  {
+    "premise": "Children smiling and waving at camera",
+    "hypothesis": "The kids are frowning",
+    "label": 2
+  },
+  {
+    "premise": "A boy is jumping on skateboard in the middle of a red bridge.",
+    "hypothesis": "The boy skates down the sidewalk.",
+    "label": 2
+  },
+  {
+    "premise": "A boy is jumping on skateboard in the middle of a red bridge.",
+    "hypothesis": "The boy does a skateboarding trick.",
+    "label": 0
+  },
+  {
+    "premise": "A boy is jumping on skateboard in the middle of a red bridge.",
+    "hypothesis": "The boy is wearing safety equipment.",
+    "label": 1
+  },
+  {
+    "premise": "An older man sits with his orange juice at a small table in a coffee shop while employees in bright colored shirts smile in the background.",
+    "hypothesis": "An older man drinks his juice as he waits for his daughter to get off work.",
+    "label": 1
+  }
+]

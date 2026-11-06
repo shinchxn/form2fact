@@ -1,0 +1,18 @@
+{
+  "dataset_name": "Form2Fact Pairwise Field Mismatch Corpus V2",
+  "total_records": 1320,
+  "v1_baseline_records": 70,
+  "v2_expanded_records": 1250,
+  "label_distribution": {
+    "MATCH": 419,
+    "UNCERTAIN": 162,
+    "MISSING": 204,
+    "MISMATCH": 377,
+    "NOT_COMPARABLE": 158
+  },
+  "splits": {
+    "train": 921,
+    "val": 195,
+    "test": 204
+  }
+}
