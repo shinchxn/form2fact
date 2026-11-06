@@ -85,12 +85,20 @@ export interface DocumentRecord {
   checksum: string;
   pageCount: number;
   processingStatus: 'Pending' | 'Extracted' | 'Failed' | 'Scanned Unreadable';
-  extractedTextByPage?: { page: number; text: string }[];
+
+  extractedTextByPage?: {
+    page: number;
+    text: string;
+    extractionMethod?: 'text_layer' | 'ocr';
+    ocrConfidence?: number | null;
+    characterCount?: number;
+    status?: 'extracted' | 'unreadable';
+  }[];
+
   isScannedOrTextPoor?: boolean;
   verificationStatus?: 'VERIFIED' | 'REJECTED' | 'UNVERIFIED' | string;
   createdAt: string;
 }
-
 export interface ExtractedField {
   id: string;
   documentId: string;

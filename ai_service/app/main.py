@@ -1,5 +1,13 @@
 import os
-from fastapi import FastAPI, HTTPException
+import secrets
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Header,
+    UploadFile,
+    File,
+    Depends
+)
 from .schemas import (
     PairwiseRequest,
     PairwiseResponse,
@@ -9,6 +17,7 @@ from .schemas import (
 )
 from .classifier import HybridPairwiseClassifier, MODEL_VERSION as FALLBACK_VERSION
 from .dataset import evaluate_baseline_classifier
+from .ocr import process_pdf, MAX_PDF_SIZE
 from ai_service.ml.inference.engine import MLPairwiseInferenceEngine
 try:
     from .model_loader import ModelArtifactLoader
@@ -26,6 +35,19 @@ loader = ModelArtifactLoader.get_instance() if ModelArtifactLoader else None
 classifier = HybridPairwiseClassifier(
     confidence_threshold=loader.model_config.get("confidence_threshold", 0.75) if loader else 0.75
 )
+
+
+def verify_ocr_token(
+    x_ocr_service_token: str = Header(default="")
+):
+    expected = os.getenv("OCR_SERVICE_TOKEN")
+    if not expected or not secrets.compare_digest(
+        x_ocr_service_token, expected
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized"
+        )
 
 
 @app.get("/api/v1/health")
@@ -53,9 +75,32 @@ def health_check():
             "sentence_transformer_ml_classification",
             "temperature_scaled_calibration",
             "startup_checksum_validation",
-            "versioned_artifact_manifest"
+            "versioned_artifact_manifest",
+            "page_level_pdf_ocr"
         ]
     }
+
+
+@app.post("/api/v1/ocr/pdf")
+async def ocr_pdf(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_ocr_token)
+):
+    data = bytearray()
+    try:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > MAX_PDF_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail="PDF exceeds 15 MB limit"
+                )
+        return process_pdf(bytes(data))
+    finally:
+        await file.close()
 
 
 @app.post("/api/v1/classify-pair", response_model=PairwiseResponse)
@@ -100,19 +145,18 @@ def batch_classify(request: BatchPairwiseRequest):
         counts[res.label.value] += 1
 
     return BatchPairwiseResponse(
-        results=results,
         total=len(results),
-        matches=counts[PairwiseLabel.MATCH.value],
-        mismatches=counts[PairwiseLabel.MISMATCH.value],
-        missing=counts[PairwiseLabel.MISSING.value],
-        uncertain=counts[PairwiseLabel.UNCERTAIN.value],
-        not_comparable=counts[PairwiseLabel.NOT_COMPARABLE.value]
+        counts=counts,
+        results=results
     )
 
 
-@app.get("/api/v1/evaluate-baseline")
+@app.post("/api/v1/evaluate")
 def run_evaluation():
-    return evaluate_baseline_classifier()
+    try:
+        return evaluate_baseline_classifier()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

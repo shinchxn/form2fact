@@ -6,6 +6,11 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /workspace
 
+# Install system dependencies including Tesseract OCR engine
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/workspace \
@@ -22,7 +27,7 @@ RUN groupadd -g 1000 appuser && \
     mkdir -p /workspace/ai_service && \
     chown -R appuser:appuser /workspace
 
-# Install dependencies
+# Install Python dependencies
 COPY requirements.txt /workspace/ai_service/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /workspace/ai_service/requirements.txt

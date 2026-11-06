@@ -16,6 +16,7 @@ services:
       - DATABASE_PATH=/app/data/form2fact.db
       - DOCUMENT_STORAGE_PATH=/app/data/dockets
       - AI_SERVICE_URL=http://ai-service:8000
+      - OCR_SERVICE_TOKEN=${OCR_SERVICE_TOKEN:-form2fact_ocr_secret_token_2026}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - form2fact_data:/app/data
@@ -44,6 +45,7 @@ services:
       - WORKERS=2
       - FORM2FACT_ML_MODEL_VERSION=${FORM2FACT_ML_MODEL_VERSION:-form2fact-hybrid-pairwise-v2.0-champion}
       - FORM2FACT_ML_ABSTENTION_THRESHOLD=${FORM2FACT_ML_ABSTENTION_THRESHOLD:-0.60}
+      - OCR_SERVICE_TOKEN=${OCR_SERVICE_TOKEN:-form2fact_ocr_secret_token_2026}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - form2fact_models:/workspace/ai_service/models
