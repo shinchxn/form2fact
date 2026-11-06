@@ -25,3 +25,10 @@ data/*.sqlite
 data/dockets/*
 !data/dockets/.gitkeep
 !data/README.md
+
+# Large ML dataset caches and raw downloads
+ai_service/ml/data/v2_acquisition/raw/
+ai_service/ml/data/v2_acquisition/extracted/
+*.tar.gz
+*.zip
+*.bin
