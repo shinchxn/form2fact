@@ -1,0 +1,42 @@
+{
+  "n_runs": 30,
+  "batch_size": 1,
+  "device": "CPU",
+  "breakdown": {
+    "1_preprocessing": {
+      "mean_ms": 0.141,
+      "median_ms": 0.137,
+      "p95_ms": 0.179,
+      "min_ms": 0.081,
+      "max_ms": 0.207
+    },
+    "2_embedding_generation": {
+      "mean_ms": 101.78,
+      "median_ms": 100.909,
+      "p95_ms": 120.404,
+      "min_ms": 92.73,
+      "max_ms": 127.998
+    },
+    "3_tabular_feature_assembly": {
+      "mean_ms": 0.229,
+      "median_ms": 0.225,
+      "p95_ms": 0.277,
+      "min_ms": 0.134,
+      "max_ms": 0.296
+    },
+    "4_classifier_head_inference": {
+      "mean_ms": 81.088,
+      "median_ms": 80.607,
+      "p95_ms": 96.681,
+      "min_ms": 71.025,
+      "max_ms": 106.647
+    },
+    "5_complete_end_to_end": {
+      "mean_ms": 183.254,
+      "median_ms": 182.93,
+      "p95_ms": 213.419,
+      "min_ms": 167.146,
+      "max_ms": 231.358
+    }
+  }
+}
