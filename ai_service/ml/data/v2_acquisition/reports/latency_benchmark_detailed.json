@@ -12,46 +12,46 @@
   "temperature": 1.8182,
   "breakdown": {
     "1_preprocessing": {
-      "mean_ms": 0.077,
-      "median_ms": 0.076,
-      "p95_ms": 0.085,
-      "min_ms": 0.066,
-      "max_ms": 0.089
+      "mean_ms": 0.06,
+      "median_ms": 0.055,
+      "p95_ms": 0.08,
+      "min_ms": 0.046,
+      "max_ms": 0.163
     },
     "2_embedding_generation": {
-      "mean_ms": 45.399,
-      "median_ms": 44.998,
-      "p95_ms": 49.142,
-      "min_ms": 42.171,
-      "max_ms": 64.65
+      "mean_ms": 37.064,
+      "median_ms": 35.094,
+      "p95_ms": 48.969,
+      "min_ms": 27.997,
+      "max_ms": 84.332
     },
     "3_tabular_feature_assembly": {
-      "mean_ms": 0.133,
-      "median_ms": 0.124,
-      "p95_ms": 0.192,
-      "min_ms": 0.097,
-      "max_ms": 0.215
+      "mean_ms": 0.095,
+      "median_ms": 0.091,
+      "p95_ms": 0.135,
+      "min_ms": 0.064,
+      "max_ms": 0.175
     },
     "4_classifier_head_inference": {
-      "mean_ms": 36.468,
-      "median_ms": 36.403,
-      "p95_ms": 38.504,
-      "min_ms": 34.932,
-      "max_ms": 39.646
+      "mean_ms": 26.053,
+      "median_ms": 23.3,
+      "p95_ms": 34.274,
+      "min_ms": 19.455,
+      "max_ms": 109.169
     },
     "5_calibration_overhead": {
-      "mean_ms": 0.089,
-      "median_ms": 0.09,
-      "p95_ms": 0.094,
-      "min_ms": 0.075,
-      "max_ms": 0.103
+      "mean_ms": 0.077,
+      "median_ms": 0.068,
+      "p95_ms": 0.116,
+      "min_ms": 0.051,
+      "max_ms": 0.245
     },
     "6_complete_end_to_end": {
-      "mean_ms": 82.18,
-      "median_ms": 81.908,
-      "p95_ms": 86.926,
-      "min_ms": 77.675,
-      "max_ms": 102.153
+      "mean_ms": 63.36,
+      "median_ms": 59.218,
+      "p95_ms": 77.855,
+      "min_ms": 47.666,
+      "max_ms": 158.97
     }
   },
   "classifier_latency_investigation": {
