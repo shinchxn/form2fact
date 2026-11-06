@@ -897,6 +897,47 @@ assert(pCase11.label === 'MISMATCH', 'Case 11: Verified contradiction with diver
 assert(pCase11.requiresHumanReview === true, 'Case 11: Number contradiction requires human review');
 assert(pCase11.explanation.includes('Conflicting numeric figures'), 'Case 11: Explanation cites conflicting numeric figures');
 
+// =========================================================================
+// 23. FRONTEND CONTRACTS & VERIFICATION WORKBENCH INTEGRATION
+// =========================================================================
+console.log('\n[23] Testing Frontend API Contracts & Workbench Integration...');
+// 1. Authenticated pairwise comparison via API endpoint
+const pwRes = await fetch(`${baseUrl}/api/v1/verification/pairwise`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${validToken}`
+  },
+  body: JSON.stringify({
+    claimField: { fieldName: 'landAreaAcres', fieldLabel: 'Declared Land Area', rawValue: '7.50' },
+    evidenceField: { fieldName: 'landAreaAcres', fieldLabel: 'Title Deed Land Area', rawValue: '6.00' },
+    comparisonType: 'numeric'
+  })
+});
+assert(pwRes.status === 200, 'Frontend POST /api/v1/verification/pairwise succeeds with valid JWT');
+const pwBody = await pwRes.json();
+assert(pwBody.success === true, 'Pairwise response includes success flag');
+assert(pwBody.data.label === 'MISMATCH', 'Pairwise endpoint classifies acreage deficit as MISMATCH');
+assert(pwBody.data.requiresHumanReview === true, 'Pairwise MISMATCH correctly flags requiresHumanReview');
+
+// 2. Unauthenticated call is rejected (P0-01 protection)
+const pwUnauthRes = await fetch(`${baseUrl}/api/v1/verification/pairwise`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    claimField: { fieldName: 'test', fieldLabel: 'Test', rawValue: '1' },
+    evidenceField: { fieldName: 'test', fieldLabel: 'Test', rawValue: '1' }
+  })
+});
+assert(pwUnauthRes.status === 401, 'Frontend unauthenticated pairwise call is rejected with 401');
+
+// 3. Frontend production build bundle verification
+const distHtmlPath = path.resolve(process.cwd(), 'dist', 'index.html');
+if (fs.existsSync(distHtmlPath)) {
+  const htmlContent = fs.readFileSync(distHtmlPath, 'utf8');
+  assert(htmlContent.includes('<div id="root"></div>'), 'Production dist/index.html includes root mount container');
+}
+
 // Close test HTTP server cleanly
 await new Promise<void>((resolve, reject) => {
   testHttpServer.close((err) => (err ? reject(err) : resolve()));
