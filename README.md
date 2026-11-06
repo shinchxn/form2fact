@@ -178,7 +178,7 @@ The backend operates via Express REST endpoints mounted both in standalone Node 
 ## 5. Development & Testing Commands
 
 ```bash
-# 1. Run all 17 automated regression & verification test suites
+# 1. Run all 22 automated regression & verification test suites (117 assertions)
 npm test
 
 # 2. Type-check with TypeScript compiler (Strict mode, zero errors)
@@ -206,4 +206,4 @@ npm run dev
 3. **Five-Way Pairwise Classification & Abstention**: The pairwise comparison pipeline outputs `MATCH`, `MISMATCH`, `MISSING`, `UNCERTAIN`, or `NOT_COMPARABLE`. Low confidence (<0.85) triggers mandatory human review.
 4. **Audit Accountability**: Every manual override or finding dismissal requires an officer identifier, timestamp, and justification comment recorded to the append-only ledger.
 5. **No External Data Leakage**: Document parsing and verification are performed locally within the server runtime.
-6. **Detailed Documentation Portal**: Complete architectural guides, ADRs, database schemas, and API references are available in the [`docs/`](docs/README.md) directory and [`DEVELOPMENT_STATUS.md`](DEVELOPMENT_STATUS.md).
+6. **Detailed Documentation Portal**: Complete architectural guides, ADRs, database schemas, and API references are available in the [`docs/`](docs/README.md) directory and [`docs/audit/DEVELOPMENT_STATUS.md`](docs/audit/DEVELOPMENT_STATUS.md).

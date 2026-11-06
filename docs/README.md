@@ -1,31 +1,60 @@
-# Form2Fact — Project Knowledge Base & Documentation
+# Form2Fact — Project Knowledge Base & Documentation Portal
 
-Welcome to the central technical documentation and knowledge base for **Form2Fact** — the AICTE institutional application scrutiny and evidence-first cross-verification platform.
+Welcome to the central technical documentation and knowledge base for **Form2Fact** — the evidence-first, domain-independent document intelligence and regulatory cross-verification platform.
 
 ---
 
 ## 📚 Knowledge Base Index
 
-| Document | Description | Target Audience |
-| :--- | :--- | :--- |
-| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System architecture, end-to-end data flows, lifecycle stages, and component interaction models. | Architects, Senior Engineers |
-| **[TECHNICAL_AUDIT.md](./TECHNICAL_AUDIT.md)** | Baseline architectural audit, feature implementation statuses, dependency analysis, gap analysis, and SIH readiness assessment. | Project Leads, Auditors, Developers |
-| **[RULES_AND_REGULATORY_NORMS.md](./RULES_AND_REGULATORY_NORMS.md)** | Statutory regulatory rules (`RULE-TEN-01` through `RULE-SAFETY-06`), AICTE Handbook citations, normalizer formulas, and concordance logic. | Regulatory Officers, Engine Developers |
-| **[API_REFERENCE.md](./API_REFERENCE.md)** | Canonical REST API documentation (`/api/v1/*`), request/response payloads, authentication, and RBAC permissions. | Backend & Frontend Developers |
-| **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** | SQLite database architecture, entity-relationship diagrams, table schemas, foreign keys, and audit ledger structure. | Database Engineers, Backend Developers |
-| **[DOCUMENT_INTELLIGENCE_ROADMAP.md](./DOCUMENT_INTELLIGENCE_ROADMAP.md)** | Implementation blueprints for OCR (`tesseract.js` / Vision API), visual canvas PDF viewing (`pdfjs-dist`), and AI document classification. | AI/ML Engineers, Document Specialists |
-| **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** | Local environment setup, test runner commands, coding standards, adding new regulatory rules, and seeding demo scenarios. | All Contributors |
+### 1. Architecture & System Design
+- 🏛️ **[Repository Architecture](architecture/REPOSITORY_ARCHITECTURE.md)** — Modular monolith structure, layer boundaries, and directory layout.
+- 📐 **[System Architecture](architecture/system-architecture.md)** — End-to-end component interaction, dual-engine design, and container orchestration.
+- 🔄 **[Data Flow Pipeline](architecture/data-flow.md)** — Lifecycle stages: Intake ➔ Ingestion ➔ Extraction ➔ Normalization ➔ Pairwise Classification ➔ Regulatory Rules ➔ Adjudication.
+- 📦 **[Domain Packs](architecture/domain-packs.md)** — Domain-agnostic abstraction and pluggable regulatory packs.
+- ⚡ **[Background Job Queues](architecture/background-jobs.md)** — Asynchronous document processing and job lifecycle.
 
----
+### 2. Forensic Audit & Remediation
+- 📋 **[Master Audit Report](audit/MASTER_AUDIT_REPORT.md)** — Comprehensive technical baseline, codebase audit, and evaluation scorecards.
+- 📊 **[Implementation Gap Matrix](audit/IMPLEMENTATION_GAP_MATRIX.md)** — Complete gap analysis and implementation coverage tracking.
+- 🎯 **[Prioritized Correction Plan](audit/PRIORITIZED_CORRECTION_PLAN.md)** — Prioritized remediation roadmap (P0 through P3).
+- 🛡️ **[P0 Remediation Report](audit/P0_REMEDIATION_REPORT.md)** — Evidence report for P0-01 through P0-05 security and classification fixes.
+- 🗃️ **[Repository Inventory](audit/REPOSITORY_INVENTORY.md)** — File-by-file categorization, ownership, and tech stack mapping.
+- 🧹 **[Duplicate & Unused Files](audit/DUPLICATE_AND_UNUSED_FILES.md)** — Forensic file audit and elimination inventory.
+- 📜 **[Repository Cleanup Report](audit/REPOSITORY_CLEANUP_REPORT.md)** — Action report for architecture cleanup and branch organization.
+- 📈 **[Development Status](audit/DEVELOPMENT_STATUS.md)** — Architectural refactor milestones and verification ledger.
 
-## 🎯 Executive Overview of Form2Fact
+### 3. API & AI Contracts
+- 🔌 **[REST Endpoints](api/rest-endpoints.md)** — Canonical REST API specification (`/api/v1/*`), request/response contracts, and RBAC permissions.
+- 🤖 **[AI Service Contracts](api/ai-service-contracts.md)** — FastAPI microservice specifications, schemas, and benchmark endpoints.
+- 🧠 **[Pairwise Classifier](ai-models/pairwise-classifier.md)** — Five-class pairwise taxonomy and hybrid deterministic/ML inference.
+- 📊 **[Benchmark Dataset](ai-models/benchmark-dataset.md)** — Golden test pairs, synthetic variations, and confusion matrices.
 
-### What is Form2Fact?
-Form2Fact is an **evidence-first decision-support platform** designed to streamline institutional scrutiny for technical education regulatory bodies (such as AICTE). It cross-verifies applicant declarations (land acreage, tenancy expiry dates, sponsoring trust identities, statutory safety clearances) against registered institutional supporting documents.
+### 4. Database & Persistence
+- 🗄️ **[Database Schema](database/schema.md)** — Dual PostgreSQL/SQLite relational models, entity relationships, and audit ledger structure.
+- 🚚 **[Migrations & ETL](database/migrations.md)** — SQLite automated schema migrations and PostgreSQL ETL scripts.
 
-### Key Governance Principles
-1. **Decision Support, Not Decision Replacement:** Form2Fact flags discrepancies and presents linked evidence with page numbers and exact clause text. It **never** autonomously declares fraud or approves/rejects institutional filings; authorized human scrutiny officers retain statutory adjudicative authority.
-2. **Deterministic Verification Guarantee:** Verification checks are powered by transparent, versioned rules linked to gazetted regulatory clauses (AICTE Approval Process Handbook), rather than opaque "black-box" model outputs.
-3. **Immutable Audit Accountability:** Every manual field correction, finding dismissal, and docket determination requires an authenticated officer ID, timestamp, and mandatory written justification recorded in an append-only ledger.
-4. **Air-Gapped & Resilient Operation:** The core verification engine, database, and deterministic parsers run 100% locally with zero external network dependencies. Cloud AI (Gemini GenAI) is used strictly as an optional narrative summarizer with automatic local fallback.
+### 5. Architectural Decision Records (ADRs)
+- **[ADR-001: Modular Monolith with Separate AI Microservice](decisions/ADR-001-modular-monolith-and-ai-service.md)**
+- **[ADR-002: Domain Pack Architecture for Regulatory Independence](decisions/ADR-002-domain-pack-architecture.md)**
+- **[ADR-003: Pairwise Field Classification with Hybrid Inference](decisions/ADR-003-pairwise-classification-hybrid-inference.md)**
+- **[ADR-004: Dual PostgreSQL and SQLite Compatibility](decisions/ADR-004-postgresql-and-sqlite-compatibility.md)**
+- **[ADR-005: Cloud-Agnostic Storage and Job Queue Abstractions](decisions/ADR-005-storage-and-job-queue-abstractions.md)**
 
+### 6. Design System & Frontend
+- 🎨 **[Enterprise Design System](design/DESIGN_SYSTEM.md)** — Design tokens, color palette, typography, status indicators, and component patterns.
+
+### 7. Regulatory Rules & Domain Configuration
+- 📜 **[Statutory Regulatory Norms](RULES_AND_REGULATORY_NORMS.md)** — AICTE Handbook citations, normalizer formulas, and concordance logic.
+- 🛠️ **[Domain Pack Authoring Guide](domain-configuration/authoring-guide.md)** — How to create custom regulatory domain packs.
+- 🏛️ **[AICTE Reference Implementation](domain-configuration/aicte-reference.md)** — Detailed specification of the default AICTE domain pack.
+
+### 8. Security & Multi-Tenancy
+- 🔒 **[Tenant Isolation](security/tenant-isolation.md)** — Regional institutional partitioning, JWT claims, and scoping filters.
+- 🛡️ **[Threat Model](security/threat-model.md)** — Threat vectors, mitigations, path traversal defense, and token validation.
+
+### 9. Team & Operations
+- 👥 **[Team Ownership & Workflows](team/TEAM_OWNERSHIP.md)** — Code ownership boundaries, branch strategies, and CI/CD checklists.
+- 🚀 **[Docker Guide](deployment/docker-guide.md)** — Multi-container Docker Compose setup instructions.
+- ✅ **[Production Checklist](deployment/production-checklist.md)** — Pre-launch security, infrastructure, and compliance checklist.
+- 💻 **[Developer Guide](DEVELOPER_GUIDE.md)** — Local setup, test running, and contribution guidelines.
+- 🗺️ **[Document Intelligence Roadmap](DOCUMENT_INTELLIGENCE_ROADMAP.md)** — Advanced OCR and visual evidence roadmap.
