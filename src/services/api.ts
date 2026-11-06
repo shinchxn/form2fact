@@ -1,7 +1,22 @@
 import { Application, DocumentRecord, ExtractedField, Finding, ReviewAction, AuditEvent, Rule, User, ScrutinyReportData } from '../types/index.ts';
 
 const API_BASE = '/api/v1';
+export async function loginUser(email: string, password: string): Promise<User> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
 
+  const json = await res.json();
+
+  if (!res.ok || !json.success || !json.token) {
+    throw new Error(json.error || 'Login failed. Please check your credentials.');
+  }
+
+  setAuthToken(json.token);
+  return json.user;
+}
 let authToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('f2f_token') : null;
 
 export function setAuthToken(token: string | null) {

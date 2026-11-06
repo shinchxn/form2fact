@@ -26,6 +26,8 @@ import {
 } from './types/index.ts';
 
 import {
+  loginUser,
+  setAuthToken,
   fetchApplications,
   fetchApplicationById,
   fetchFindings,
@@ -47,13 +49,12 @@ export default function App() {
   const [allFindings, setAllFindings] = useState<Finding[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'usr-001',
-    displayName: 'Dr. Aruna Rao',
-    email: 'aruna.rao@scrutiny.edu.in',
-    role: 'Reviewer',
-    department: 'Western Scrutiny Committee'
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Target document and page for deep linking into Document Review
   const [reviewTargetDocId, setReviewTargetDocId] = useState<string | undefined>();
@@ -75,36 +76,58 @@ export default function App() {
     }
   }, [currentView, isInspectingApplication, selectedApplication?.id]);
 
-  // Load initial global data
-  const loadGlobalData = async () => {
-    try {
-      await ensureAuthToken();
-      const [appsData, findingsData, auditsData, rulesData, userData] = await Promise.all([
+  // Load global data for the authenticated user
+const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setLoginError('');
+  setIsLoggingIn(true);
+
+  try {
+    const user = await loginUser(loginEmail.trim(), loginPassword);
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setLoginPassword('');
+  } catch (err) {
+    setLoginError(
+      err instanceof Error ? err.message : 'Login failed. Please try again.'
+    );
+  } finally {
+    setIsLoggingIn(false);
+  }
+};
+const loadGlobalData = async () => {
+  if (!isAuthenticated || !currentUser) return;
+
+  try {
+    const [appsData, findingsData, auditsData, rulesData, userData] =
+      await Promise.all([
         fetchApplications(),
         fetchFindings(),
         fetchAuditEvents(),
         fetchRules(),
         fetchCurrentUser()
       ]);
-      setApplications(appsData);
-      setAllFindings(findingsData);
-      setAuditEvents(auditsData);
-      setRules(rulesData);
-      if (userData) setCurrentUser(userData);
 
-      // Preload default application context for Evidence Viewer / Dossiers without locking the Applications list view
-      if (!selectedApplication && appsData.length > 0) {
-        const mismatchApp = appsData.find((a) => a.referenceNumber.includes('0842')) || appsData[0];
-        await loadApplicationDetails(mismatchApp.id);
-      }
-    } catch (err) {
-      console.error('Failed to load initial data:', err);
-    } finally {
-      setIsLoading(false);
+    setApplications(appsData);
+    setAllFindings(findingsData);
+    setAuditEvents(auditsData);
+    setRules(rulesData);
+
+    if (userData) setCurrentUser(userData);
+
+    if (!selectedApplication && appsData.length > 0) {
+      const mismatchApp =
+        appsData.find((a) => a.referenceNumber.includes('0842')) || appsData[0];
+
+      await loadApplicationDetails(mismatchApp.id);
     }
-  };
-
-  const loadApplicationDetails = async (id: string) => {
+  } catch (err) {
+    console.error('Failed to load initial data:', err);
+  } finally {
+    setIsLoading(false);
+  }
+};
+      const loadApplicationDetails = async (id: string) => {
     try {
       const details = await fetchApplicationById(id);
       setSelectedApplication(details.application);
@@ -117,8 +140,39 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadGlobalData();
-  }, []);
+  const checkSession = async () => {
+    const token = localStorage.getItem('f2f_token');
+
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const user = await fetchCurrentUser();
+
+      if (user) {
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } else {
+        setAuthToken(null);
+        setIsLoading(false);
+      }
+    } catch {
+      setAuthToken(null);
+      setIsLoading(false);
+    }
+  };
+
+  checkSession();
+}, []);
+
+useEffect(() => {
+  if (isAuthenticated && currentUser) {
+    setIsLoading(true);
+    void loadGlobalData();
+  }
+}, [isAuthenticated]);
 
   const handleSelectApplication = async (app: Application) => {
     await loadApplicationDetails(app.id);
@@ -173,9 +227,67 @@ export default function App() {
     (f) => f.status === 'Open' || f.status === 'Under Review' || f.status === 'Unable to Determine'
   ).length;
 
+  if (!isAuthenticated || !currentUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 font-sans">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-900">Form2Fact</h1>
+          <p className="mt-2 mb-8 text-sm text-slate-600">
+            Sign in with your institutional account.
+          </p>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-slate-700">
+                Institutional email
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="login-password" className="mb-2 block text-sm font-medium text-slate-700">
+                Password
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+
+            {loginError && (
+              <p role="alert" className="text-sm text-red-600">
+                {loginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white disabled:opacity-60"
+            >
+              {isLoggingIn ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex h-screen bg-[#F8FAFC] text-[#0F172A] overflow-hidden font-sans">
-      {/* Modern SaaS Left Sidebar */}
+    {/* Modern SaaS Left Sidebar */}
       <Sidebar
         currentView={currentView}
         onNavigate={handleNavigate}
