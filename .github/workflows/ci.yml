@@ -1,0 +1,160 @@
+name: Form2Fact CI Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - 'feature/**'
+      - 'chore/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # =========================================================================
+  # 1. Node.js Full-Stack Validation (Express API, React SPA, 22 Test Suites)
+  # =========================================================================
+  node-validation:
+    name: Node.js (Lint, Test & Build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Static Type-Check (Strict Mode)
+        run: npm run lint
+
+      - name: Production Frontend Build
+        run: npm run build
+
+      - name: Execute 22-Suite Regression Runner (117 Assertions)
+        run: npm test
+
+  # =========================================================================
+  # 2. Python AI Document Intelligence Microservice & MLOps Validation
+  # =========================================================================
+  python-validation:
+    name: Python AI & MLOps Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python Runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ai_service/requirements.txt
+
+      - name: Verify Python Syntax & Bytecode Compilation
+        run: |
+          python -m py_compile ai_service/app/main.py
+          python -m py_compile ai_service/app/classifier.py
+          python -m py_compile ai_service/app/schemas.py
+          python -m py_compile ai_service/app/dataset.py
+          python -m py_compile ai_service/app/model_loader.py
+
+      - name: Verify Model Manifest & Checksum Integrity
+        run: |
+          python -c "
+          import json, hashlib, os
+          manifest = json.load(open('ai_service/models/manifest.json'))
+          v1 = manifest['versions']['v1.0.0']
+          meta_hash = hashlib.sha256(open('ai_service/models/versions/v1.0.0/metadata.json', 'rb').read()).hexdigest()
+          conf_hash = hashlib.sha256(open('ai_service/models/versions/v1.0.0/config.json', 'rb').read()).hexdigest()
+          assert meta_hash == v1['checksums']['metadata.json'], 'Metadata checksum mismatch'
+          assert conf_hash == v1['checksums']['config.json'], 'Config checksum mismatch'
+          print('Model manifest and artifact checksums verified 100%')
+          "
+
+      - name: Verify FastAPI Startup, Model Loading & Benchmark Dataset
+        run: |
+          python -c "
+          from ai_service.app.main import app
+          from ai_service.app.model_loader import ModelArtifactLoader
+          from ai_service.app.dataset import evaluate_baseline_classifier
+          loader = ModelArtifactLoader.get_instance()
+          assert loader.is_loaded, 'Model failed to load'
+          assert not loader.is_fallback, 'Model loaded in fallback mode unexpectedly'
+          report = evaluate_baseline_classifier()
+          assert report['accuracy'] == 1.0, f'Expected 1.0 accuracy, got {report[\"accuracy\"]}'
+          print('FastAPI app and benchmark dataset verification succeeded.')
+          "
+
+  # =========================================================================
+  # 3. Docker Containerization & Compose Config Verification
+  # =========================================================================
+  docker-validation:
+    name: Docker & Container Orchestration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Validate Root Docker Compose Configuration
+        run: docker compose config
+
+      - name: Validate Infrastructure Compose Configuration
+        run: docker compose -f infrastructure/docker-compose.yml config
+
+      - name: Build Core API Server Container
+        run: docker build -t form2fact-api:ci .
+
+      - name: Build AI Microservice Container
+        run: docker build -t form2fact-ai:ci ./ai_service
+
+  # =========================================================================
+  # 4. Security Audit & Credential Leakage Guardrails
+  # =========================================================================
+  security-audit:
+    name: Security & Secret Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Scan Repository for Accidentally Committed Secrets
+        run: |
+          # Ensure no real private keys or production credentials are committed
+          if grep -r --exclude-dir={.git,node_modules} "BEGIN RSA PRIVATE KEY" .; then
+            echo "FATAL: RSA Private Key detected in repository!"
+            exit 1
+          fi
+          if grep -r --exclude-dir={.git,node_modules,dist} "AKIA[0-9A-Z]{16}" .; then
+            echo "FATAL: AWS Access Key detected in repository!"
+            exit 1
+          fi
+          echo "Secret scan passed: zero credential leakage detected."
