@@ -87,6 +87,7 @@ export interface DocumentRecord {
   processingStatus: 'Pending' | 'Extracted' | 'Failed' | 'Scanned Unreadable';
   extractedTextByPage?: { page: number; text: string }[];
   isScannedOrTextPoor?: boolean;
+  verificationStatus?: 'VERIFIED' | 'REJECTED' | 'UNVERIFIED' | string;
   createdAt: string;
 }
 
