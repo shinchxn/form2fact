@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
-import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
@@ -20,6 +19,7 @@ import { domainRegistry } from './domains/index.ts';
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.ts';
 import { jobQueue } from './core/jobs/index.ts';
+import { storageProvider } from './core/storage/index.ts';
 import { validate } from './core/validation/validate.ts';
 import { errorHandler } from './core/errors/errorHandler.ts';
 
@@ -340,20 +340,19 @@ router.post('/api/v1/applications/:id/documents', authenticateToken, requireRole
     });
   }
 
-  // 2. Generate secure UUID identifier & SHA-256 checksum
+  // 2. Generate secure UUID identifier
   const docId = `doc-${crypto.randomUUID()}`;
-  const checksum = `sha256-${crypto.createHash('sha256').update(file.buffer).digest('hex').slice(0, 16)}`;
 
-  // 3. Durable Disk Storage: write file to ./data/dockets/{appId}/{docId}.pdf
-  const docketDir = path.resolve(process.cwd(), 'data', 'dockets', applicationId);
-  if (!fs.existsSync(docketDir)) {
-    fs.mkdirSync(docketDir, { recursive: true });
-  }
-  const storageFilePath = path.join(docketDir, `${docId}.pdf`);
-  fs.writeFileSync(storageFilePath, file.buffer);
+  // 3. Save using the configured storage provider
+  const storageMetadata = await storageProvider.save(
+    applicationId,
+    docId,
+    file.buffer,
+    'application/pdf'
+  );
 
-  const relativeStorageKey = `dockets/${applicationId}/${docId}.pdf`;
-
+  const checksum = storageMetadata.checksum;
+  const relativeStorageKey = storageMetadata.storageKey;
   let pageCount = 1;
   let extractedPages: NonNullable<DocumentRecord['extractedTextByPage']> = [];
   let isScannedOrTextPoor = false;
@@ -521,9 +520,8 @@ router.get('/api/v1/applications/:id/documents', authenticateToken, (req: Authen
 /**
  * P0-04: Stream stored PDF securely with authentication, tenant isolation, and path traversal protection
  */
-router.get('/api/v1/applications/:id/documents/:docId/file', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/api/v1/applications/:id/documents/:docId/file', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id: applicationId, docId } = req.params;
-
   // Path traversal defense: strictly alphanumeric, hyphen, underscore
   const safeIdRegex = /^[a-zA-Z0-9_-]+$/;
   if (!safeIdRegex.test(applicationId) || !safeIdRegex.test(docId)) {
@@ -547,30 +545,50 @@ router.get('/api/v1/applications/:id/documents/:docId/file', authenticateToken, 
     return res.status(404).json({ success: false, error: 'Document record not found in docket.' });
   }
 
-  const docketDir = path.resolve(process.cwd(), 'data', 'dockets', app.id);
-  const diskPath = path.resolve(docketDir, `${doc.id}.pdf`);
+  // Verify the stored key matches this application's document
+  const expectedStorageKey = `dockets/${app.id}/${doc.id}.pdf`;
 
-  // Verify file path is strictly contained inside the docket directory
-  if (!diskPath.startsWith(docketDir + path.sep)) {
-    return res.status(400).json({ success: false, error: 'Illegal path traversal attempt.' });
+  if (doc.storageKey !== expectedStorageKey) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid document storage key.'
+    });
   }
 
-  if (!fs.existsSync(diskPath)) {
-    return res.status(404).json({ success: false, error: 'Stored document file binary not found on disk.' });
-  }
+  try {
+    const fileStream = await storageProvider.getStream(doc.storageKey);
 
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${doc.originalFilename}"`);
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Security-Policy', "default-src 'none'");
-  res.sendFile(diskPath);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${doc.originalFilename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+
+    fileStream.on('error', (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Unable to read stored document.'
+        });
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    fileStream.pipe(res);
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      error: 'Stored document file binary not found.'
+    });
+  }
 });
 
 /**
  * Delete document with role enforcement and tenant isolation
  */
-router.delete('/api/v1/documents/:id', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  router.delete('/api/v1/documents/:id', authenticateToken, requireRole(['Administrator', 'Reviewer']), async (req: AuthenticatedRequest, res: Response) => {
   const doc = db.getDocumentById(req.params.id);
+
   if (!doc) {
     return res.status(404).json({ success: false, error: 'Document not found' });
   }
@@ -580,14 +598,79 @@ router.delete('/api/v1/documents/:id', authenticateToken, requireRole(['Administ
   const app = db.getApplicationById(doc.applicationId, userOrgId, isAdmin);
 
   if (!app) {
-    return res.status(403).json({ success: false, error: 'Access denied: Document belongs to an application in another organization.' });
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied: Document belongs to an application in another organization.'
+    });
   }
 
-  const success = db.removeDocument(req.params.id, req.user);
-  if (!success) {
-    return res.status(404).json({ success: false, error: 'Document not found' });
+  const expectedStorageKey = `dockets/${doc.applicationId}/${doc.id}.pdf`;
+
+  if (doc.storageKey !== expectedStorageKey) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid document storage key.'
+    });
   }
-  res.json({ success: true, message: 'Document removed from docket and validation rules updated.' });
+
+  let fileBuffer: Buffer;
+
+  try {
+    fileBuffer = await storageProvider.getBuffer(doc.storageKey);
+  } catch {
+    return res.status(404).json({
+      success: false,
+      error: 'Stored document file not found. Database record was not deleted.'
+    });
+  }
+
+  try {
+    const fileDeleted = await storageProvider.delete(doc.storageKey);
+
+    if (!fileDeleted) {
+      return res.status(500).json({
+        success: false,
+        error: 'Could not delete stored document.'
+      });
+    }
+  } catch {
+    return res.status(500).json({
+      success: false,
+      error: 'Storage deletion failed.'
+    });
+  }
+
+  try {
+    const success = db.removeDocument(req.params.id, req.user);
+
+    if (!success) {
+      await storageProvider.save(doc.applicationId, doc.id, fileBuffer, 'application/pdf');
+
+      return res.status(404).json({
+        success: false,
+        error: 'Document record not found. PDF was restored.'
+      });
+    }
+  } catch {
+    try {
+      await storageProvider.save(doc.applicationId, doc.id, fileBuffer, 'application/pdf');
+    } catch {
+      return res.status(500).json({
+        success: false,
+        error: 'Database deletion failed and PDF restoration failed. Manual recovery is required.'
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Database deletion failed. PDF was restored.'
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: 'Document and stored PDF deleted successfully.'
+  });
 });
 
 // =========================================================================

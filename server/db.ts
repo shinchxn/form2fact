@@ -857,35 +857,62 @@ export class ScrutinyDatabase {
    * Deletes a document, cascades its extracted fields, and re-evaluates all application rules.
    */
   removeDocument(documentId: string, actor?: User): boolean {
-    const doc = this.getDocumentById(documentId);
-    if (!doc) return false;
+    this.db.exec('BEGIN IMMEDIATE');
 
-    const effectiveActor = actor || this.currentUser;
-    const appId = doc.applicationId;
+    try {
+      const doc = this.getDocumentById(documentId);
+      if (!doc) {
+        this.db.exec('ROLLBACK');
+        return false;
+      }
 
-    // Delete fields and document
-    this.db.prepare('DELETE FROM extracted_fields WHERE documentId = ?').run(documentId);
-    this.db.prepare('DELETE FROM documents WHERE id = ?').run(documentId);
+      const effectiveActor = actor || this.currentUser;
+      const appId = doc.applicationId;
 
-    // Update application count
-    const docCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM documents WHERE applicationId = ?').get(appId) as any)?.c || 0);
-    this.db.prepare('UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?').run(docCount, new Date().toISOString(), appId);
+      // Delete extracted fields and document
+      this.db.prepare(
+        'DELETE FROM extracted_fields WHERE documentId = ?'
+      ).run(documentId);
 
-    this.recordAudit({
-      actorId: effectiveActor.id,
-      actorName: effectiveActor.displayName,
-      action: 'Document Removed',
-      entityType: 'Document',
-      entityReference: doc.originalFilename,
-      note: `Document detached from application docket. Re-evaluating validation checks.`
-    });
+      this.db.prepare(
+        'DELETE FROM documents WHERE id = ?'
+      ).run(documentId);
 
-    // Re-run validation immediately so missing requirements (RULE-DOC-04) trigger and stale findings clear
-    this.runValidation(appId, effectiveActor);
+      // Update application document count
+      const docCount = Number(
+        (this.db.prepare(
+          'SELECT COUNT(*) as c FROM documents WHERE applicationId = ?'
+        ).get(appId) as any)?.c || 0
+      );
 
-    return true;
+      this.db.prepare(
+        'UPDATE applications SET documentCount = ?, updatedAt = ? WHERE id = ?'
+      ).run(docCount, new Date().toISOString(), appId);
+
+      // Record deletion audit event
+      this.recordAudit({
+        actorId: effectiveActor.id,
+        actorName: effectiveActor.displayName,
+        action: 'Document Removed',
+        entityType: 'Document',
+        entityReference: doc.originalFilename,
+        note: 'Document detached from application docket. Re-evaluating validation checks.'
+      });
+
+      // Re-run validation within the same transaction
+      this.runValidation(appId, effectiveActor);
+
+      this.db.exec('COMMIT');
+      return true;
+        } catch (error) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        // Preserve the original database error.
+      }
+      throw error;
+    }
   }
-
   getFieldsByDocument(documentId: string): ExtractedField[] {
     const rows = this.db.prepare('SELECT * FROM extracted_fields WHERE documentId = ?').all(documentId) as any[];
     return rows.map(r => this.mapFieldRow(r));
