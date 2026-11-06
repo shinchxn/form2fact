@@ -44,6 +44,11 @@ export const Header: React.FC<HeaderProps> = ({
           },
           { label: 'Evidence Viewer' }
         ];
+      case 'verification':
+        return [
+          { label: 'Workspace', action: () => onNavigate('overview') },
+          { label: 'Pairwise Verification' }
+        ];
       case 'findings':
         return [
           { label: 'Workspace', action: () => onNavigate('overview') },

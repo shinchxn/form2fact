@@ -8,7 +8,8 @@ import {
   FileSpreadsheet,
   History,
   Settings,
-  Layers
+  Layers,
+  BookOpen
 } from 'lucide-react';
 import { User } from '../types/index.ts';
 
@@ -16,6 +17,7 @@ export type ViewType =
   | 'overview'
   | 'applications'
   | 'document-review'
+  | 'verification'
   | 'findings'
   | 'rules'
   | 'reports'
@@ -39,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'overview' as ViewType, label: 'Overview', icon: LayoutDashboard },
     { id: 'applications' as ViewType, label: 'Applications', icon: FolderOpen },
     { id: 'document-review' as ViewType, label: 'Evidence Viewer', icon: FileSearch },
+    { id: 'verification' as ViewType, label: 'Pairwise Verification', icon: Scale },
     {
       id: 'findings' as ViewType,
       label: 'Findings',
@@ -49,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const governanceNav = [
-    { id: 'rules' as ViewType, label: 'Rules Engine', icon: Scale },
+    { id: 'rules' as ViewType, label: 'Rules Engine', icon: BookOpen },
     { id: 'audit' as ViewType, label: 'Audit Ledger', icon: History },
     { id: 'settings' as ViewType, label: 'System Settings', icon: Settings },
   ];
@@ -68,10 +71,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         type="button"
         aria-current={isActive ? 'page' : undefined}
         onClick={() => onNavigate(item.id)}
-        className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 text-sm rounded-md transition-colors text-left ${
+        className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 text-sm rounded-md transition-colors text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-[#4F46E5] ${
           isActive
-            ? 'bg-[#F8FAFC] text-[#0F172A] font-semibold'
-            : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]/70 font-medium'
+            ? 'bg-[#F1F5F9] text-[#0F172A] font-semibold'
+            : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] font-medium'
         }`}
       >
         {isActive && (
