@@ -33,6 +33,10 @@ The platform bridges the trust gap between institutional approval applications (
 > **Governance Principle — Zero Autonomous Decisions:**  
 > Form2Fact is an evidence-backed **decision-support platform**, NOT an autonomous approval black-box. The platform never approves or rejects regulatory applications automatically. All non-trivial variances, missing documentation, or model uncertainty are triaged with handbook citations and routed to accredited human scrutiny officers for adjudication.
 
+> **Operational Data Policy — Production vs. Evaluation Sandbox:**  
+> - **Production Mode (`NODE_ENV=production` or `SEED_DEMO_DATA=false`):** Guaranteed **Zero Mock / Zero Fabricated Data**. The platform initializes with an empty institutional docket (0 applications, 0 documents, 0 findings) preserving only the statutory rules catalog and authorized authority accounts. Every displayed metric, table row, and finding originates solely from authentic applicant submissions, genuine uploaded PDFs, real OCR extraction, and neural/deterministic screening.
+> - **Evaluation Sandbox (`NODE_ENV=development`):** Designed exclusively for technical reviewers and automated CI testing. Sample institutional PDFs are available under `sample_documents/` and authorized test fixtures can be loaded via the administrator console to evaluate the scrutiny engine without requiring manual data entry.
+
 ---
 
 ## 2. Overview
