@@ -1,0 +1,24 @@
+# Version control
+.git
+.gitignore
+
+# Python bytecode & virtual environments
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.venv
+venv
+env
+
+# Logs & temp files
+*.log
+.DS_Store
+
+# Environment & secrets
+.env*
+!.env.example
+
+# Unversioned large raw datasets (preserve models/)
+raw_data/
+checkpoints/
