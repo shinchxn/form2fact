@@ -99,3 +99,4 @@ To ensure zero architectural regression and maintain full testability at every s
    - Validate end-to-end user and regulatory verification workflow.
 5. **Step 5: Prepare Release PR (`develop` $\to$ `main`)**
    - Prepare formal release PR and await explicit human authorization before merging into `main`.
+
