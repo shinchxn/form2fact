@@ -6,7 +6,10 @@ from unittest.mock import patch
 import pymupdf
 from PIL import Image
 
-from app import ocr
+try:
+    from ai_service.app import ocr
+except ImportError:
+    from app import ocr
 
 
 def create_text_pdf():
@@ -51,7 +54,7 @@ class TestOCR(unittest.TestCase):
             result["pages"][0]["text"]
         )
 
-    @patch("app.ocr.pytesseract.image_to_data")
+    @patch.object(ocr.pytesseract, "image_to_data")
     def test_scanned_pdf_ocr(self, mock_ocr):
         mock_ocr.return_value = {
             "text": ["FORM2FACT", "TEST"],

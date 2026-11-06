@@ -146,7 +146,11 @@ def batch_classify(request: BatchPairwiseRequest):
 
     return BatchPairwiseResponse(
         total=len(results),
-        counts=counts,
+        matches=counts.get(PairwiseLabel.MATCH.value, 0),
+        mismatches=counts.get(PairwiseLabel.MISMATCH.value, 0),
+        missing=counts.get(PairwiseLabel.MISSING.value, 0),
+        uncertain=counts.get(PairwiseLabel.UNCERTAIN.value, 0),
+        not_comparable=counts.get(PairwiseLabel.NOT_COMPARABLE.value, 0),
         results=results
     )
 
