@@ -150,11 +150,23 @@ jobs:
       - name: Scan Repository for Accidentally Committed Secrets
         run: |
           # Ensure no real private keys or production credentials are committed
-          if grep -r --exclude-dir={.git,node_modules} "BEGIN RSA PRIVATE KEY" .; then
+          if grep -r -E \
+            --exclude-dir=.git \
+            --exclude-dir=node_modules \
+            --exclude-dir=dist \
+            --exclude=ci.yml \
+            --exclude=CI_CD_PIPELINE.md \
+            "BEGIN RSA PRIVATE KEY" .; then
             echo "FATAL: RSA Private Key detected in repository!"
             exit 1
           fi
-          if grep -r --exclude-dir={.git,node_modules,dist} "AKIA[0-9A-Z]{16}" .; then
+          if grep -r -E \
+            --exclude-dir=.git \
+            --exclude-dir=node_modules \
+            --exclude-dir=dist \
+            --exclude=ci.yml \
+            --exclude=CI_CD_PIPELINE.md \
+            "AKIA[0-9A-Z]{16}" .; then
             echo "FATAL: AWS Access Key detected in repository!"
             exit 1
           fi
