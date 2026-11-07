@@ -33,3 +33,21 @@ ai_service/ml/data/v2_acquisition/extracted/
 *.tar.gz
 *.zip
 *.bin
+
+# V3 Machine Learning Data Isolation & Confidentiality Guards
+ai_service/ml/data/v3/raw/*
+!ai_service/ml/data/v3/raw/.gitkeep
+!ai_service/ml/data/v3/raw/README.md
+
+# Prevent accidental commitment of confidential institutional documents in V3 pipelines
+ai_service/ml/data/v3/**/*.pdf
+ai_service/ml/data/v3/**/*.tif
+ai_service/ml/data/v3/**/*.tiff
+ai_service/ml/data/v3/**/*.png
+ai_service/ml/data/v3/**/*.jpg
+ai_service/ml/data/v3/**/*.jpeg
+!ai_service/ml/data/v3/**/.gitkeep
+
+# Exclude local V3 uncommitted training checkpoints
+ai_service/ml/artifacts/v3/checkpoints/
+ai_service/ml/artifacts/v3/*.tmp
