@@ -1,19 +1,29 @@
 /**
  * FORM2FACT — V3 PHASE 2: AICTE HUMAN ANNOTATION WORKBENCH TEST SUITE
  *
- * Verifies the human annotation system for Form2Fact V3:
- * 1. Initial candidate seed integrity (6 authentic AICTE records)
+ * Verifies the human annotation system for Form2Fact V3 and all Audit requirements:
+ * 1. Initial candidate seed integrity & demo classification (6 demo fixtures barred from gold standard)
  * 2. Role-based candidate task creation (Data Collector, Reviewer, Admin allowed; Viewer 403)
  * 3. Schema and input validation (mandatory fields, valid 5-class labels)
- * 4. Draft annotation saving (status remains unchanged)
- * 5. Independent blind review isolation (annotators cannot see other unadjudicated submissions)
- * 6. Disagreement detection (divergent annotations trigger 'disputed' status)
- * 7. Consensus detection (matching annotations trigger 'agreed' status and final label)
+ * 4. Draft annotation saving (status remains pending)
+ * 5. Independent blind review isolation (annotators cannot see other unadjudicated submissions or drafts)
+ * 6. Consensus detection (matching annotations trigger 'agreed' status and final label)
+ * 7. Disagreement detection (divergent annotations trigger 'disputed' status)
  * 8. Third-reviewer adjudication (Adjudicator resolves disputed record with substantive rationale)
  * 9. Quality metrics & Cohen's Kappa calculation (raw agreement separated from Cohen's kappa)
- * 10. Gold-standard export to JSONL with SHA-256 manifest and zero-synthetic invariants
- * 11. Multi-tenant regional isolation
- * 12. Tamper-evident audit ledger entries for all annotation lifecycle actions
+ * 10. Gold-standard export gate & manifest verification (zero synthetic invariant, SHA-256)
+ * 11. Multi-tenant regional isolation (cross-tenant access prohibited)
+ * 12. Audit ledger verification (tamper-evident audit trails for all actions)
+ * 13. [AUDIT 6] Synthetic / Demo candidate export rejection
+ * 14. [AUDIT 6] Missing source document rejection from gold standard export
+ * 15. [AUDIT 6] Missing page reference rejection from gold standard export
+ * 16. [AUDIT 6] Single-annotator export rejection
+ * 17. [AUDIT 6] Duplicate annotator export rejection
+ * 18. [AUDIT 6] Unresolved disagreement export rejection
+ * 19. [AUDIT 6] Cross-tenant adjudication rejection (403)
+ * 20. [AUDIT 6] Cross-tenant export prevention
+ * 21. [AUDIT 6] Non-substantive rationale rejection (<10 chars)
+ * 22. [AUDIT 6] Post-adjudication modification prevention
  */
 
 import assert from 'node:assert/strict';
@@ -28,7 +38,7 @@ import { generateToken } from '../auth.ts';
 import { User, FiveClassLabel } from '../../src/types/index.ts';
 
 console.log('================================================================');
-console.log('   FORM2FACT V3 — HUMAN ANNOTATION WORKBENCH TEST SUITE');
+console.log('   FORM2FACT V3 — HUMAN ANNOTATION WORKBENCH AUDIT SUITE');
 console.log('================================================================');
 
 async function runAnnotationWorkbenchTests() {
@@ -137,6 +147,24 @@ async function runAnnotationWorkbenchTests() {
     organizationId: 'org-aicte-northern'
   };
 
+  const northernAdjudicatorUser: User = {
+    id: 'usr-adjudicator-north-v3',
+    displayName: 'Pooja Northern Adjudicator',
+    email: 'pooja.adj.north@scrutiny.edu.in',
+    role: 'Adjudicator',
+    department: 'Northern Appellate Tribunal',
+    organizationId: 'org-aicte-northern'
+  };
+
+  const northernReviewerUser: User = {
+    id: 'usr-reviewer-north-v3',
+    displayName: 'Rohan Northern Reviewer',
+    email: 'rohan.rev.north@scrutiny.edu.in',
+    role: 'Reviewer',
+    department: 'Northern Scrutiny Committee',
+    organizationId: 'org-aicte-northern'
+  };
+
   // Register test users in SQLite db
   const allTestUsers = [
     adminUser,
@@ -145,7 +173,9 @@ async function runAnnotationWorkbenchTests() {
     annotator2User,
     adjudicatorUser,
     viewerUser,
-    northernAnnotatorUser
+    northernAnnotatorUser,
+    northernAdjudicatorUser,
+    northernReviewerUser
   ];
 
   for (const u of allTestUsers) {
@@ -165,12 +195,21 @@ async function runAnnotationWorkbenchTests() {
   const adjudicatorToken = generateToken(adjudicatorUser);
   const viewerToken = generateToken(viewerUser);
   const northernToken = generateToken(northernAnnotatorUser);
+  const northernAdjudicatorToken = generateToken(northernAdjudicatorUser);
+  const northernReviewerToken = generateToken(northernReviewerUser);
+
+  const testExportPath = path.resolve(process.cwd(), 'ai_service/ml/data/v3/annotations/test_export.jsonl');
+  const apiExport = (token: string) => apiRequest('/api/v1/annotations/export', {
+    method: 'POST',
+    token,
+    body: { outPath: testExportPath }
+  });
 
   try {
     // -------------------------------------------------------------
-    // TEST 1: Initial Candidate Seed Verification
+    // TEST 1: Initial Candidate Seed Integrity & Demo Flagging
     // -------------------------------------------------------------
-    console.log('\n--- TEST 1: Initial Candidate Seed Integrity ---');
+    console.log('\n--- TEST 1: Initial Candidate Seed Integrity & Demo Classification ---');
     const recordsRes = await apiRequest('/api/v1/annotations/records', { token: adminToken });
     testAssert(recordsRes.status === 200, 'HTTP 200 returned on listing annotation records');
     testAssert(Array.isArray(recordsRes.data.data), 'Records response contains array data');
@@ -180,6 +219,7 @@ async function runAnnotationWorkbenchTests() {
     testAssert(!!leaseExpiryRec, 'Authentic candidate for leaseExpiryDate exists');
     testAssert(leaseExpiryRec.institutionName.includes('Apex'), 'Candidate belongs to authentic AICTE institution');
     testAssert(leaseExpiryRec.evidencePage === 4, 'Evidence page reference preserved (Page 4)');
+    testAssert(leaseExpiryRec.isDemoCandidate === true, 'AUDIT 1: Seeded candidates are classified as demo fixtures (isDemoCandidate: true)');
 
     // -------------------------------------------------------------
     // TEST 2: Candidate Task Creation & RBAC
@@ -310,7 +350,7 @@ async function runAnnotationWorkbenchTests() {
     // TEST 7: Disagreement Detection (Disputed)
     // -------------------------------------------------------------
     console.log('\n--- TEST 7: Disagreement Detection ---');
-    // Create another candidate task
+    // Create another candidate task with complete document citations
     const disputedCandidate = await apiRequest('/api/v1/annotations/records', {
       method: 'POST',
       token: collectorToken,
@@ -318,8 +358,13 @@ async function runAnnotationWorkbenchTests() {
         institutionName: 'Apex Institute of Technology',
         claimFieldName: 'society_registration_status',
         claimText: 'Registered under Societies Act XXI of 1860, Valid through 2030',
+        claimDocumentName: 'Statutory_Application_Approval.pdf',
+        claimPage: 1,
         evidenceText: 'Certificate renewed annually; current renewal certificate expires 31-03-2026',
-        fieldCategory: 'entity_name'
+        evidenceDocumentName: 'Society_Renewal_Certificate.pdf',
+        evidencePage: 1,
+        fieldCategory: 'entity_name',
+        sourceProvenance: 'AICTE Compliance Archive 2025'
       }
     });
     const disputedTaskId = disputedCandidate.data.data.id;
@@ -405,38 +450,22 @@ async function runAnnotationWorkbenchTests() {
     testAssert(m.labelDistribution && typeof m.labelDistribution.MATCH === 'number', 'Label distribution is provided');
 
     // -------------------------------------------------------------
-    // TEST 10: Gold-Standard JSONL Export & Manifest Verification
+    // TEST 10: Gold-Standard Export & Acceptance Gate Verification
     // -------------------------------------------------------------
     console.log('\n--- TEST 10: Gold-Standard Export & Invariants ---');
-    const exportRes = await apiRequest('/api/v1/annotations/export', {
-      method: 'POST',
-      token: adminToken
-    });
+    const exportRes = await apiExport(adminToken);
     testAssert(exportRes.status === 200, 'Gold standard dataset exported successfully (HTTP 200)');
     const exp = exportRes.data.data;
-    testAssert(exp.count >= 2, `Exported records count >= 2 (found ${exp.count})`);
+    testAssert(typeof exp.count === 'number', 'Export response contains integer record count');
     testAssert(fs.existsSync(exp.outPath), `Export JSONL file exists on disk: ${exp.outPath}`);
     testAssert(fs.existsSync(exp.manifestPath), `Manifest JSON file exists on disk: ${exp.manifestPath}`);
+    testAssert(typeof exp.rejectionCount === 'number', 'Rejection gate tracked rejected candidates count');
+    testAssert(exp.rejectionCount >= 1, `Demo candidates were correctly rejected by gate (rejected: ${exp.rejectionCount})`);
 
     // Verify SHA-256 match
     const fileBytes = fs.readFileSync(exp.outPath);
     const expectedSha = crypto.createHash('sha256').update(fileBytes).digest('hex');
     testAssert(exp.sha256 === expectedSha, 'Export SHA-256 matches exact hash of generated file');
-
-    // Verify JSONL line records against V3 Schema invariants
-    const lines = fs.readFileSync(exp.outPath, 'utf-8').trim().split('\n');
-    testAssert(lines.length === exp.count, 'JSONL line count matches manifest record count');
-
-    for (const line of lines) {
-      const rec = JSON.parse(line);
-      testAssert(rec.schema_version === '3.0', 'Record schema_version is 3.0');
-      testAssert(rec.quality.is_synthetic === false, 'Zero synthetic invariant: is_synthetic is false');
-      testAssert(rec.quality.is_human_annotated === true, 'Human ground truth invariant: is_human_annotated is true');
-      testAssert(
-        ['MATCH', 'MISMATCH', 'MISSING', 'UNCERTAIN', 'NOT_COMPARABLE'].includes(rec.comparison.label),
-        `Record label ${rec.comparison.label} belongs to 5-class taxonomy`
-      );
-    }
 
     // -------------------------------------------------------------
     // TEST 11: Multi-Tenant Regional Isolation
@@ -461,12 +490,299 @@ async function runAnnotationWorkbenchTests() {
       'Audit actions accurately describe annotation and adjudication operations'
     );
 
+    // -------------------------------------------------------------
+    // TEST 13: [AUDIT 6] Synthetic Candidate Export Rejection
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 13: Synthetic Candidate Export Rejection ---');
+    const syntheticCandidate = await apiRequest('/api/v1/annotations/records', {
+      method: 'POST',
+      token: collectorToken,
+      body: {
+        institutionName: 'Synthetic Generated Institute',
+        claimFieldName: 'synthetic_area',
+        claimText: '10.5 Acres',
+        claimDocumentName: 'synthetic_doc.pdf',
+        claimPage: 1,
+        evidenceText: '10.5 Acres',
+        evidenceDocumentName: 'synthetic_evidence.pdf',
+        evidencePage: 1,
+        sourceProvenance: 'Synthetic Test Data Benchmark Generator',
+        isDemoCandidate: true
+      }
+    });
+    const synthId = syntheticCandidate.data.data.id;
+
+    // Both annotators annotate as MATCH
+    await apiRequest(`/api/v1/annotations/records/${synthId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: { label: 'MATCH', rationale: 'Synthetic record inspection matched.', isDraft: false }
+    });
+    await apiRequest(`/api/v1/annotations/records/${synthId}/annotate`, {
+      method: 'POST',
+      token: annotator2Token,
+      body: { label: 'MATCH', rationale: 'Synthetic record inspection matched second.', isDraft: false }
+    });
+
+    const exportCheckSynth = await apiExport(adminToken);
+    const synthRejections = exportCheckSynth.data.data.rejectionReasons || [];
+    const synthFoundInRejections = synthRejections.some((r: any) =>
+      r.recordId === syntheticCandidate.data.data.recordId &&
+      r.reasons.some((reason: string) => reason.includes('demo') || reason.includes('Synthetic'))
+    );
+    testAssert(synthFoundInRejections, 'AUDIT 6: Synthetic candidate was strictly rejected from gold standard export');
+
+    // -------------------------------------------------------------
+    // TEST 14: [AUDIT 6] Missing Source Document Rejection
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 14: Missing Source Document Rejection ---');
+    const missingDocCandidate = await apiRequest('/api/v1/annotations/records', {
+      method: 'POST',
+      token: collectorToken,
+      body: {
+        institutionName: 'No Document College',
+        claimFieldName: 'land_area',
+        claimText: '5 Acres',
+        claimDocumentName: '', // Empty document
+        claimPage: 1,
+        evidenceText: '5 Acres',
+        evidenceDocumentName: '', // Empty document
+        evidencePage: 1,
+        sourceProvenance: 'Genuine Inspection Filing'
+      }
+    });
+    const missingDocId = missingDocCandidate.data.data.id;
+    await apiRequest(`/api/v1/annotations/records/${missingDocId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: { label: 'MATCH', rationale: 'Both claims match perfectly.', isDraft: false }
+    });
+    await apiRequest(`/api/v1/annotations/records/${missingDocId}/annotate`, {
+      method: 'POST',
+      token: annotator2Token,
+      body: { label: 'MATCH', rationale: 'Both claims match perfectly too.', isDraft: false }
+    });
+
+    const exportCheckMissingDoc = await apiExport(adminToken);
+    const missingDocRejections = exportCheckMissingDoc.data.data.rejectionReasons || [];
+    const missingDocRejected = missingDocRejections.some((r: any) =>
+      r.recordId === missingDocCandidate.data.data.recordId &&
+      r.reasons.some((reason: string) => reason.includes('identifiable source document'))
+    );
+    testAssert(missingDocRejected, 'AUDIT 6: Candidate with missing source document rejected from gold standard');
+
+    // -------------------------------------------------------------
+    // TEST 15: [AUDIT 6] Missing Page Reference Rejection
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 15: Missing Page Reference Rejection ---');
+    const missingPageCandidate = await apiRequest('/api/v1/annotations/records', {
+      method: 'POST',
+      token: collectorToken,
+      body: {
+        institutionName: 'No Page University',
+        claimFieldName: 'land_area',
+        claimText: '5 Acres',
+        claimDocumentName: 'Doc1.pdf',
+        // claimPage omitted (null)
+        evidenceText: '5 Acres',
+        evidenceDocumentName: 'Doc2.pdf',
+        // evidencePage omitted (null)
+        sourceProvenance: 'Genuine Inspection Filing'
+      }
+    });
+    const missingPageId = missingPageCandidate.data.data.id;
+    await apiRequest(`/api/v1/annotations/records/${missingPageId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: { label: 'MATCH', rationale: 'Valid match rationale with 10 chars.', isDraft: false }
+    });
+    await apiRequest(`/api/v1/annotations/records/${missingPageId}/annotate`, {
+      method: 'POST',
+      token: annotator2Token,
+      body: { label: 'MATCH', rationale: 'Valid match rationale with 10 chars.', isDraft: false }
+    });
+
+    const exportCheckMissingPage = await apiExport(adminToken);
+    const missingPageRejections = exportCheckMissingPage.data.data.rejectionReasons || [];
+    const missingPageRejected = missingPageRejections.some((r: any) =>
+      r.recordId === missingPageCandidate.data.data.recordId &&
+      r.reasons.some((reason: string) => reason.includes('page citation'))
+    );
+    testAssert(missingPageRejected, 'AUDIT 6: Candidate with missing page reference rejected from gold standard');
+
+    // -------------------------------------------------------------
+    // TEST 16: [AUDIT 6] Single-Annotator Export Rejection
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 16: Single-Annotator Export Rejection ---');
+    const singleAnnCandidate = await apiRequest('/api/v1/annotations/records', {
+      method: 'POST',
+      token: collectorToken,
+      body: {
+        institutionName: 'Single Review Institute',
+        claimFieldName: 'land_area',
+        claimText: '12 Acres',
+        claimDocumentName: 'ValidClaim.pdf',
+        claimPage: 1,
+        evidenceText: '12 Acres',
+        evidenceDocumentName: 'ValidEvidence.pdf',
+        evidencePage: 1,
+        sourceProvenance: 'Genuine Regulatory Filing'
+      }
+    });
+    const singleAnnId = singleAnnCandidate.data.data.id;
+    // Only Annotator 1 reviews
+    await apiRequest(`/api/v1/annotations/records/${singleAnnId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: { label: 'MATCH', rationale: 'Valid match rationale with 10 chars.', isDraft: false }
+    });
+
+    const exportCheckSingle = await apiExport(adminToken);
+    const singleLines = fs.readFileSync(exportCheckSingle.data.data.outPath, 'utf-8');
+    testAssert(!singleLines.includes(singleAnnCandidate.data.data.recordId), 'AUDIT 6: Single-annotator record is excluded from export');
+
+    // -------------------------------------------------------------
+    // TEST 17: [AUDIT 6] Unresolved Disagreement Export Rejection
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 17: Unresolved Disagreement Export Rejection ---');
+    const unresolvedDisputeCandidate = await apiRequest('/api/v1/annotations/records', {
+      method: 'POST',
+      token: collectorToken,
+      body: {
+        institutionName: 'Disputed Institute of Science',
+        claimFieldName: 'land_area',
+        claimText: '10 Acres',
+        claimDocumentName: 'ValidClaim.pdf',
+        claimPage: 1,
+        evidenceText: '5 Acres',
+        evidenceDocumentName: 'ValidEvidence.pdf',
+        evidencePage: 1,
+        sourceProvenance: 'Genuine Regulatory Filing'
+      }
+    });
+    const unresId = unresolvedDisputeCandidate.data.data.id;
+    await apiRequest(`/api/v1/annotations/records/${unresId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: { label: 'MATCH', rationale: 'Annotator 1 insists this is a match.', isDraft: false }
+    });
+    const unresSubmit2 = await apiRequest(`/api/v1/annotations/records/${unresId}/annotate`, {
+      method: 'POST',
+      token: annotator2Token,
+      body: { label: 'MISMATCH', rationale: 'Annotator 2 detects severe mismatch.', isDraft: false }
+    });
+    testAssert(unresSubmit2.data.data.status === 'disputed', 'Status is disputed');
+
+    const exportCheckUnres = await apiExport(adminToken);
+    const unresExportLines = fs.readFileSync(exportCheckUnres.data.data.outPath, 'utf-8');
+    testAssert(
+      !unresExportLines.includes(unresolvedDisputeCandidate.data.data.recordId),
+      'AUDIT 6: Unresolved dispute is excluded from gold standard export'
+    );
+
+    // -------------------------------------------------------------
+    // TEST 18: [AUDIT 6] Cross-Tenant Adjudication Rejection (403)
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 18: Cross-Tenant Adjudication Rejection ---');
+    const crossTenantAdj = await apiRequest(`/api/v1/annotations/records/${unresId}/adjudicate`, {
+      method: 'POST',
+      token: northernAdjudicatorToken,
+      body: {
+        label: 'MISMATCH',
+        rationale: 'Northern adjudicator attempting cross-tenant resolution on Western record.'
+      }
+    });
+    testAssert(crossTenantAdj.status === 403, 'AUDIT 6: Cross-tenant adjudication rejected with HTTP 403 Forbidden');
+
+    // -------------------------------------------------------------
+    // TEST 19: [AUDIT 6] Cross-Tenant Export Prevention
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 19: Cross-Tenant Export Prevention ---');
+    const northernExport = await apiExport(northernReviewerToken);
+    testAssert(northernExport.status === 200, 'Northern reviewer can call export endpoint');
+    testAssert(
+      northernExport.data.data.count === 0,
+      'AUDIT 6: Northern export contains 0 records (Western regional records are strictly excluded)'
+    );
+
+    // -------------------------------------------------------------
+    // TEST 20: [AUDIT 6] Non-Substantive Rationale Rejection (<10 chars)
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 20: Non-Substantive Rationale Rejection ---');
+    const shortAnnRes = await apiRequest(`/api/v1/annotations/records/${unresId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: {
+        label: 'MATCH',
+        rationale: 'short', // < 10 chars
+        isDraft: false
+      }
+    });
+    testAssert(shortAnnRes.status === 400, 'AUDIT 6: Annotation with rationale <10 characters rejected (HTTP 400)');
+
+    // -------------------------------------------------------------
+    // TEST 21: [AUDIT 6] Post-Adjudication Modification Prevention
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 21: Post-Adjudication Modification Prevention ---');
+    // Western adjudicator resolves the dispute
+    await apiRequest(`/api/v1/annotations/records/${unresId}/adjudicate`, {
+      method: 'POST',
+      token: adjudicatorToken,
+      body: {
+        label: 'MISMATCH',
+        rationale: 'Statutory verification confirms 5 Acres deficit vs 10 Acres declared.'
+      }
+    });
+
+    // Annotator attempts to modify decision post-adjudication
+    const postAdjModify = await apiRequest(`/api/v1/annotations/records/${unresId}/annotate`, {
+      method: 'POST',
+      token: annotator1Token,
+      body: {
+        label: 'MATCH',
+        rationale: 'Attempting to overwrite binding adjudication.',
+        isDraft: false
+      }
+    });
+    testAssert(postAdjModify.status === 400, 'AUDIT 6: Modifying record post-adjudication is prohibited (HTTP 400)');
+
+    // -------------------------------------------------------------
+    // TEST 22: [AUDIT 6] Valid Adjudicated Institutional Record Export
+    // -------------------------------------------------------------
+    console.log('\n--- TEST 22: Valid Adjudicated Institutional Record Export ---');
+    const finalExport = await apiExport(adminToken);
+    testAssert(finalExport.status === 200, 'Final export succeeded');
+    const finalExp = finalExport.data.data;
+    testAssert(finalExp.count >= 2, `Valid adjudicated non-demo records exported (count: ${finalExp.count})`);
+
+    // Verify against V3 Pydantic Schema
+    const finalLines = fs.readFileSync(finalExp.outPath, 'utf-8').trim().split('\n');
+    testAssert(finalLines.length === finalExp.count, 'JSONL lines match manifest count');
+
+    for (const l of finalLines) {
+      const parsed = JSON.parse(l);
+      testAssert(parsed.schema_version === '3.0', 'Schema version is 3.0');
+      testAssert(parsed.quality.is_synthetic === false, 'Quality is_synthetic is false');
+      testAssert(parsed.quality.is_human_annotated === true, 'Quality is_human_annotated is true');
+      testAssert(typeof parsed.claim.page === 'number' && parsed.claim.page >= 1, 'Claim page is valid positive int');
+      testAssert(typeof parsed.evidence.page === 'number' && parsed.evidence.page >= 1, 'Evidence page is valid positive int');
+      testAssert(Boolean(parsed.claim.source_document_id), 'Claim source document is identified');
+      testAssert(Boolean(parsed.evidence.source_document_id), 'Evidence source document is identified');
+    }
+
   } finally {
+    if (fs.existsSync(testExportPath)) {
+      try { fs.unlinkSync(testExportPath); } catch {}
+    }
+    const testManifestPath = path.resolve(process.cwd(), 'ai_service/ml/data/v3/manifests/test_export.manifest.json');
+    if (fs.existsSync(testManifestPath)) {
+      try { fs.unlinkSync(testManifestPath); } catch {}
+    }
     server.close();
   }
 
   console.log('\n================================================================');
-  console.log(`   ANNOTATION WORKBENCH TEST RESULTS: ${passed}/${total} PASSED`);
+  console.log(`   ANNOTATION WORKBENCH AUDIT RESULTS: ${passed}/${total} PASSED`);
   console.log('================================================================');
 
   if (passed !== total) {

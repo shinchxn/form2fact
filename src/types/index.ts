@@ -244,6 +244,7 @@ export interface AnnotationRecord {
   normalizedEvidenceValue?: string;
   fieldCategory?: string;
   sourceProvenance: string;
+  isDemoCandidate?: boolean;
   licence?: string;
   originalSourceLabel?: string;
   status: AnnotationRecordStatus;

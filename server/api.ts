@@ -1269,13 +1269,15 @@ router.post('/api/v1/annotations/records/:id/adjudicate', authenticateToken, req
       {
         id: req.user!.id,
         displayName: req.user!.displayName,
-        role: req.user!.role
+        role: req.user!.role,
+        organizationId: req.user!.organizationId
       },
       { label, rationale }
     );
     res.json({ success: true, data: record });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Failed to adjudicate record.' });
+    const status = err.message?.includes('Access denied') ? 403 : 400;
+    res.status(status).json({ success: false, error: err.message || 'Failed to adjudicate record.' });
   }
 });
 
@@ -1292,9 +1294,14 @@ router.get('/api/v1/annotations/metrics', authenticateToken, (req: Authenticated
  * Exports agreed and adjudicated records to canonical V3 gold-standard JSONL and manifest.
  * Allowed: Administrator, Reviewer, Adjudicator.
  */
-router.post('/api/v1/annotations/export', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (_req: AuthenticatedRequest, res: Response) => {
+router.post('/api/v1/annotations/export', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = db.exportGoldStandard();
+    const outPath = typeof req.body?.outPath === 'string' && req.body.outPath.trim() ? req.body.outPath.trim() : undefined;
+    const result = db.exportGoldStandard({
+      organizationId: req.user?.organizationId,
+      role: req.user?.role,
+      outPath
+    });
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to export gold standard dataset.' });

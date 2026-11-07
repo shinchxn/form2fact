@@ -532,6 +532,8 @@ export async function exportGoldStandard(): Promise<{
   outPath: string;
   sha256: string;
   manifestPath: string;
+  rejectionCount?: number;
+  rejectionReasons?: { recordId: string; reasons: string[] }[];
 }> {
   const res = await fetch(`${API_BASE}/annotations/export`, {
     method: 'POST',

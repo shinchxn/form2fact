@@ -151,6 +151,8 @@ export const AnnotationWorkbenchView: React.FC<AnnotationWorkbenchViewProps> = (
     outPath: string;
     sha256: string;
     manifestPath: string;
+    rejectionCount?: number;
+    rejectionReasons?: { recordId: string; reasons: string[] }[];
   } | null>(null);
 
   // New Candidate Task Form State
@@ -675,9 +677,16 @@ export const AnnotationWorkbenchView: React.FC<AnnotationWorkbenchViewProps> = (
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1.5 mb-1">
-                      <span className="text-[11px] font-mono font-semibold text-[#0D9488] truncate">
-                        {r.claimFieldName}
-                      </span>
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="text-[11px] font-mono font-semibold text-[#0D9488] truncate">
+                          {r.claimFieldName}
+                        </span>
+                        {r.isDemoCandidate && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] uppercase tracking-wider shrink-0">
+                            Demo
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
                           r.status === 'agreed'
@@ -1415,6 +1424,13 @@ export const AnnotationWorkbenchView: React.FC<AnnotationWorkbenchViewProps> = (
                 <span className="text-[#64748B] block text-[10px] uppercase">Record Count:</span>
                 <span className="font-bold text-[#0A2540]">{exportResult.count} records</span>
               </div>
+
+              {exportResult.rejectionCount !== undefined && exportResult.rejectionCount > 0 && (
+                <div className="p-2 bg-[#FFFBEB] border border-[#FDE68A] rounded text-[#92400E]">
+                  <span className="font-bold block text-[10px] uppercase">Rejection Gate Active:</span>
+                  <span>{exportResult.rejectionCount} candidates rejected (demo fixtures, missing docket citations, or incomplete reviews).</span>
+                </div>
+              )}
 
               <div>
                 <span className="text-[#64748B] block text-[10px] uppercase">Export Path:</span>

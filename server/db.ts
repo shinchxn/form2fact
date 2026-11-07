@@ -25,6 +25,25 @@ export interface DatabaseUser extends User {
   passwordHash: string;
 }
 
+export const VALID_V3_FIELD_TYPES = new Set([
+  'numeric', 'date', 'entity_name', 'address', 'cadastral_survey',
+  'generic', 'document_presence', 'textual_claim'
+]);
+
+export function mapFieldTypeToV3(category?: string | null): string {
+  if (!category) return 'generic';
+  const c = category.toLowerCase().trim();
+  if (VALID_V3_FIELD_TYPES.has(c)) return c;
+  if (c.includes('date') || c.includes('time') || c.includes('expiry') || c.includes('tenure')) return 'date';
+  if (c.includes('area') || c.includes('numeric') || c.includes('amount') || c.includes('capacity') || c.includes('ratio')) return 'numeric';
+  if (c.includes('cadastral') || c.includes('survey') || c.includes('khasra') || c.includes('plot')) return 'cadastral_survey';
+  if (c.includes('address') || c.includes('location')) return 'address';
+  if (c.includes('name') || c.includes('entity') || c.includes('trust') || c.includes('institution') || c.includes('sponsoring')) return 'entity_name';
+  if (c.includes('document') || c.includes('presence') || c.includes('noc')) return 'document_presence';
+  if (c.includes('text') || c.includes('claim') || c.includes('compliance') || c.includes('safety')) return 'textual_claim';
+  return 'generic';
+}
+
 export class ScrutinyDatabase {
   db: DatabaseSync;
   dbPath: string;
@@ -229,6 +248,7 @@ export class ScrutinyDatabase {
         adjudicationRationale TEXT,
         adjudicatedAt TEXT,
         organizationId TEXT NOT NULL DEFAULT 'org-aicte-western',
+        isDemoCandidate INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
@@ -255,6 +275,12 @@ export class ScrutinyDatabase {
     } catch {}
     try {
       this.db.exec("ALTER TABLE applications ADD COLUMN organizationId TEXT NOT NULL DEFAULT 'org-aicte-western';");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE annotation_records ADD COLUMN isDemoCandidate INTEGER NOT NULL DEFAULT 0;");
+    } catch {}
+    try {
+      this.db.exec("UPDATE annotation_records SET isDemoCandidate = 1, sourceProvenance = 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)' WHERE id LIKE 'ann-rec-00%';");
     } catch {}
 
     // Initialize initial annotation candidate records if table is empty
@@ -1673,8 +1699,8 @@ export class ScrutinyDatabase {
           claimFieldName, claimText, claimDocumentId, claimDocumentName, claimPage,
           evidenceText, evidenceDocumentId, evidenceDocumentName, evidencePage, evidenceLocation,
           normalizedClaimValue, normalizedEvidenceValue, fieldCategory,
-          sourceProvenance, originalSourceLabel, status, finalLabel, organizationId, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          sourceProvenance, originalSourceLabel, status, finalLabel, organizationId, isDemoCandidate, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const candidates = [
@@ -1697,11 +1723,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: '2054-03-31',
           normalizedEvidenceValue: '2054-03-31',
           fieldCategory: 'Land & Tenure',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'pending',
           finalLabel: null,
-          organizationId: 'org-aicte-western'
+          organizationId: 'org-aicte-western',
+          isDemoCandidate: 1
         },
         {
           id: 'ann-rec-002',
@@ -1722,11 +1749,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: '8.50',
           normalizedEvidenceValue: '5.20',
           fieldCategory: 'Land & Tenure',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'pending',
           finalLabel: null,
-          organizationId: 'org-aicte-western'
+          organizationId: 'org-aicte-western',
+          isDemoCandidate: 1
         },
         {
           id: 'ann-rec-003',
@@ -1747,11 +1775,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: 'NOC-FS-2024-991',
           normalizedEvidenceValue: null,
           fieldCategory: 'Safety & Regulatory Compliance',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'pending',
           finalLabel: null,
-          organizationId: 'org-aicte-western'
+          organizationId: 'org-aicte-western',
+          isDemoCandidate: 1
         },
         {
           id: 'ann-rec-004',
@@ -1772,11 +1801,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: 'KALYANI EDUCATIONAL FOUNDATION',
           normalizedEvidenceValue: 'KALYANI EDUCATIONAL FOUNDATION',
           fieldCategory: 'Institution Identity & Sponsoring Body',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'pending',
           finalLabel: null,
-          organizationId: 'org-aicte-western'
+          organizationId: 'org-aicte-western',
+          isDemoCandidate: 1
         },
         {
           id: 'ann-rec-005',
@@ -1797,11 +1827,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: 'PLOT 12 PHASE 3 INDUSTRIAL AREA SECTOR 62 PUNE',
           normalizedEvidenceValue: 'SURVEY NO 44 2 NEAR METRO STATION SECTOR 62 PUNE DISTRICT MAHARASHTRA',
           fieldCategory: 'Address & Survey Plots',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'pending',
           finalLabel: null,
-          organizationId: 'org-aicte-western'
+          organizationId: 'org-aicte-western',
+          isDemoCandidate: 1
         },
         {
           id: 'ann-rec-006',
@@ -1822,11 +1853,12 @@ export class ScrutinyDatabase {
           normalizedClaimValue: 'ARYABHATA WELFARE SOCIETY',
           normalizedEvidenceValue: 'ARYABHATA COMMERCIAL REAL ESTATE TRADING PRIVATE LIMITED',
           fieldCategory: 'Institution Identity & Sponsoring Body',
-          sourceProvenance: 'AICTE Institutional Scrutiny Dossier 2026',
+          sourceProvenance: 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)',
           originalSourceLabel: null,
           status: 'disputed', // Pre-seeded disagreement to allow testing third-reviewer adjudication
           finalLabel: null,
-          organizationId: 'org-aicte-central'
+          organizationId: 'org-aicte-central',
+          isDemoCandidate: 1
         }
       ];
 
@@ -1836,7 +1868,7 @@ export class ScrutinyDatabase {
           c.claimFieldName, c.claimText, c.claimDocumentId, c.claimDocumentName, c.claimPage,
           c.evidenceText, c.evidenceDocumentId, c.evidenceDocumentName, c.evidencePage, c.evidenceLocation,
           c.normalizedClaimValue, c.normalizedEvidenceValue, c.fieldCategory,
-          c.sourceProvenance, c.originalSourceLabel, c.status, c.finalLabel, c.organizationId, now, now
+          c.sourceProvenance, c.originalSourceLabel, c.status, c.finalLabel, c.organizationId, c.isDemoCandidate, now, now
         );
       }
 
@@ -1919,8 +1951,8 @@ export class ScrutinyDatabase {
         claimFieldName, claimText, claimDocumentId, claimDocumentName, claimPage,
         evidenceText, evidenceDocumentId, evidenceDocumentName, evidencePage, evidenceLocation,
         normalizedClaimValue, normalizedEvidenceValue, fieldCategory,
-        sourceProvenance, originalSourceLabel, status, finalLabel, organizationId, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sourceProvenance, originalSourceLabel, status, finalLabel, organizationId, isDemoCandidate, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       recordId,
@@ -1945,6 +1977,7 @@ export class ScrutinyDatabase {
       'pending',
       null,
       orgId,
+      data.isDemoCandidate ? 1 : 0,
       now,
       now
     );
@@ -1980,6 +2013,10 @@ export class ScrutinyDatabase {
     const record = this.getAnnotationRecordById(recordId, annotator.id, annotator.role);
     if (!record) {
       throw new Error(`Annotation record '${recordId}' not found.`);
+    }
+
+    if (record.status === 'adjudicated' && annotator.role !== 'Administrator') {
+      throw new Error('This record has already received binding adjudication and cannot be modified.');
     }
 
     // Tenant check
@@ -2064,7 +2101,7 @@ export class ScrutinyDatabase {
 
   adjudicateRecord(
     recordId: string,
-    adjudicator: { id: string; displayName: string; role: string },
+    adjudicator: { id: string; displayName: string; role: string; organizationId?: string },
     data: { label: FiveClassLabel; rationale: string }
   ): AnnotationRecord {
     if (adjudicator.role !== 'Adjudicator' && adjudicator.role !== 'Administrator') {
@@ -2083,6 +2120,16 @@ export class ScrutinyDatabase {
     const record = this.getAnnotationRecordById(recordId, adjudicator.id, adjudicator.role);
     if (!record) {
       throw new Error(`Annotation record '${recordId}' not found.`);
+    }
+
+    // Tenant check
+    if (adjudicator.role !== 'Administrator' && record.organizationId && adjudicator.organizationId && record.organizationId !== adjudicator.organizationId) {
+      throw new Error('Access denied: Record belongs to another regional organization.');
+    }
+
+    // Dispute status requirement
+    if (record.status !== 'disputed' && adjudicator.role !== 'Administrator') {
+      throw new Error(`Only records with 'disputed' status require adjudication (current status: '${record.status}').`);
     }
 
     const now = new Date().toISOString();
@@ -2165,17 +2212,23 @@ export class ScrutinyDatabase {
     const completedRecords = agreedRecords + adjudicatedRecords;
 
     // Calculate Raw Agreement & Cohen's Kappa on all records having >= 2 submitted annotations
-    const pairedSql = `
+    let pairedSql = `
       SELECT a1.recordId, a1.label as label1, a2.label as label2
       FROM user_annotations a1
       JOIN user_annotations a2 ON a1.recordId = a2.recordId AND a1.id < a2.id
+      JOIN annotation_records r ON a1.recordId = r.id
       WHERE a1.isDraft = 0 AND a2.isDraft = 0
     `;
-    const pairs = this.db.prepare(pairedSql).all() as { recordId: string; label1: string; label2: string }[];
+    const pairedParams: any[] = [];
+    if (organizationId) {
+      pairedSql += ' AND r.organizationId = ?';
+      pairedParams.push(organizationId);
+    }
+    const pairs = this.db.prepare(pairedSql).all(...pairedParams) as { recordId: string; label1: string; label2: string }[];
     const N = pairs.length;
 
     let rawAgreementRate = 0;
-    let cohensKappa = 1.0;
+    let cohensKappa = 0.0;
     let kappaInterpretation = 'No Double Annotations';
 
     if (N > 0) {
@@ -2202,8 +2255,8 @@ export class ScrutinyDatabase {
         pe += (f1[c] / N) * (f2[c] / N);
       }
 
-      if (pe >= 1.0) {
-        cohensKappa = 1.0;
+      if (Math.abs(1 - pe) < 1e-6) {
+        cohensKappa = po === 1.0 ? 1.0 : 0.0;
       } else {
         cohensKappa = Math.round(((po - pe) / (1 - pe)) * 1000) / 1000;
       }
@@ -2243,20 +2296,129 @@ export class ScrutinyDatabase {
     };
   }
 
-  exportGoldStandard(outPath?: string): { count: number; outPath: string; sha256: string; manifestPath: string } {
-    const exportFile = outPath || path.resolve(process.cwd(), 'ai_service/ml/data/v3/annotations/gold_standard_human.jsonl');
-    const manifestFile = path.resolve(process.cwd(), 'ai_service/ml/data/v3/manifests/gold_standard_human.manifest.json');
+  exportGoldStandard(options?: {
+    organizationId?: string;
+    role?: string;
+    outPath?: string;
+  }): {
+    count: number;
+    outPath: string;
+    sha256: string;
+    manifestPath: string;
+    rejectionCount: number;
+    rejectionReasons: { recordId: string; reasons: string[] }[];
+  } {
+    const exportFile = options?.outPath || path.resolve(process.cwd(), 'ai_service/ml/data/v3/annotations/gold_standard_human.jsonl');
+    const baseName = path.basename(exportFile, path.extname(exportFile));
+    const manifestFile = options?.outPath
+      ? path.resolve(path.dirname(exportFile), '..', 'manifests', `${baseName}.manifest.json`)
+      : path.resolve(process.cwd(), 'ai_service/ml/data/v3/manifests/gold_standard_human.manifest.json');
 
-    // Fetch all agreed or adjudicated records with finalLabel
-    const records = this.db.prepare(`
+    let sql = `
       SELECT * FROM annotation_records
       WHERE status IN ('agreed', 'adjudicated') AND finalLabel IS NOT NULL
-      ORDER BY recordId ASC
-    `).all() as any[];
+    `;
+    const params: any[] = [];
+    if (options?.organizationId && options?.role !== 'Administrator') {
+      sql += ' AND organizationId = ?';
+      params.push(options.organizationId);
+    }
+    sql += ' ORDER BY recordId ASC';
+
+    const records = this.db.prepare(sql).all(...params) as any[];
 
     const jsonlRows: string[] = [];
+    const rejectionReasons: { recordId: string; reasons: string[] }[] = [];
 
     for (const r of records) {
+      const reasons: string[] = [];
+
+      // GATE 1: Demo / Synthetic Candidate Rejection
+      if (r.isDemoCandidate === 1 || r.isDemoCandidate === true) {
+        reasons.push('Candidate record is an illustrative/demo fixture and is barred from the human gold standard.');
+      }
+      if (r.sourceProvenance && (
+        r.sourceProvenance.toLowerCase().includes('demo') ||
+        r.sourceProvenance.toLowerCase().includes('synthetic') ||
+        r.sourceProvenance.toLowerCase().includes('mock')
+      )) {
+        reasons.push(`Source provenance indicates non-genuine origin: '${r.sourceProvenance}'.`);
+      }
+
+      // GATE 2: Identifiable Source Document Citations
+      const hasClaimDoc = Boolean(r.claimDocumentId || (r.claimDocumentName && r.claimDocumentName.trim().length > 0));
+      const hasEvidenceDoc = Boolean(r.evidenceDocumentId || (r.evidenceDocumentName && r.evidenceDocumentName.trim().length > 0));
+      if (!hasClaimDoc || !hasEvidenceDoc) {
+        reasons.push('Missing identifiable source document citation for claim or evidence.');
+      }
+
+      // GATE 3: Page references must be valid positive integers
+      if (r.claimPage === null || r.claimPage === undefined || Number(r.claimPage) < 1) {
+        reasons.push('Missing or invalid application docket page citation.');
+      }
+      if (r.evidencePage === null || r.evidencePage === undefined || Number(r.evidencePage) < 1) {
+        reasons.push('Missing or invalid supporting evidence docket page citation.');
+      }
+
+      // GATE 4: Double-Blind Independent Human Submissions
+      const submissions = this.db.prepare(`
+        SELECT * FROM user_annotations
+        WHERE recordId = ? AND isDraft = 0
+        ORDER BY createdAt ASC
+      `).all(r.id) as any[];
+
+      if (submissions.length < 2) {
+        reasons.push(`Insufficient independent review: minimum of 2 non-draft human submissions required (found ${submissions.length}).`);
+      } else {
+        const uniqueAnnotators = new Set(submissions.map((s) => s.annotatorId));
+        if (uniqueAnnotators.size < 2) {
+          reasons.push('Duplicate annotator submissions: independent review requires two distinct authorized evaluators.');
+        }
+
+        // Substantive rationale checks on all submissions
+        for (const sub of submissions) {
+          if (!sub.rationale || sub.rationale.trim().length < 10) {
+            reasons.push(`Submission by annotator ${sub.annotatorName || sub.annotatorId} lacks substantive rationale (<10 characters).`);
+            break;
+          }
+        }
+
+        // GATE 5: Consensus or Adjudication Verification
+        if (r.status === 'agreed') {
+          const firstLabel = submissions[0].label;
+          const secondLabel = submissions[1].label;
+          if (firstLabel !== secondLabel || firstLabel !== r.finalLabel) {
+            reasons.push(`Disagreement marked as agreed without consensus: submissions (${firstLabel}, ${secondLabel}) deviate from finalLabel (${r.finalLabel}).`);
+          }
+        } else if (r.status === 'adjudicated') {
+          if (!r.adjudicatorId || !r.adjudicationRationale || r.adjudicationRationale.trim().length < 10) {
+            reasons.push('Adjudication record lacks verified third-reviewer identity or substantive statutory rationale (minimum 10 characters).');
+          }
+        } else {
+          reasons.push(`Invalid record status '${r.status}': unresolved disputes cannot enter the gold standard.`);
+        }
+      }
+
+      // GATE 6: Complete Audit History
+      const auditCount = Number((this.db.prepare(`
+        SELECT COUNT(*) as count FROM audit_events
+        WHERE entityReference = ?
+      `).get(r.id) as any)?.count || 0);
+
+      if (auditCount === 0) {
+        reasons.push('Audit history missing: candidate lifecycle actions have not been recorded in system ledger.');
+      }
+
+      // If any gate failed, reject and record reasons
+      if (reasons.length > 0) {
+        rejectionReasons.push({
+          recordId: r.recordId,
+          reasons
+        });
+        continue;
+      }
+
+      // All gates passed: format canonical V3 pairwise record
       const canonicalRecord = {
         record_id: `gold-${r.recordId}`,
         schema_version: '3.0',
@@ -2264,18 +2426,18 @@ export class ScrutinyDatabase {
         claim: {
           text: r.claimText,
           field_name: r.claimFieldName,
-          source_document_id: r.claimDocumentId || null,
-          page: r.claimPage || null
+          source_document_id: r.claimDocumentId || r.claimDocumentName,
+          page: Number(r.claimPage)
         },
         evidence: {
           text: r.evidenceText,
-          source_document_id: r.evidenceDocumentId || null,
-          page: r.evidencePage || null
+          source_document_id: r.evidenceDocumentId || r.evidenceDocumentName,
+          page: Number(r.evidencePage)
         },
         comparison: {
           source_label: r.originalSourceLabel || null,
           label: r.finalLabel,
-          field_type: r.fieldCategory || 'generic',
+          field_type: mapFieldTypeToV3(r.fieldCategory),
           normalization_applied: ['regulatory_standardization'],
           ocr_quality: r.status === 'adjudicated' ? 'adjudicated_verified' : 'high'
         },
@@ -2291,6 +2453,7 @@ export class ScrutinyDatabase {
           review_status: 'audited'
         }
       };
+
       jsonlRows.push(JSON.stringify(canonicalRecord));
     }
 
@@ -2306,6 +2469,7 @@ export class ScrutinyDatabase {
       name: 'Form2Fact V3 AICTE Gold-Standard Human Annotation Corpus',
       export_timestamp: new Date().toISOString(),
       record_count: jsonlRows.length,
+      rejection_count: rejectionReasons.length,
       file: {
         filename: path.basename(exportFile),
         relative_path: path.relative(process.cwd(), exportFile).replace(/\\/g, '/'),
@@ -2316,7 +2480,8 @@ export class ScrutinyDatabase {
         is_synthetic: false,
         is_human_annotated: true,
         adjudication_required_for_disagreements: true,
-        blind_review_enforced: true
+        blind_review_enforced: true,
+        rejection_gate_active: true
       }
     };
 
@@ -2327,7 +2492,9 @@ export class ScrutinyDatabase {
       count: jsonlRows.length,
       outPath: exportFile,
       sha256: sha256,
-      manifestPath: manifestFile
+      manifestPath: manifestFile,
+      rejectionCount: rejectionReasons.length,
+      rejectionReasons
     };
   }
 
@@ -2338,11 +2505,16 @@ export class ScrutinyDatabase {
 
     const myAnnotation = userId ? allUserAnnotations.find(u => u.annotatorId === userId) : undefined;
 
+    // Ensure drafts belonging to other annotators are NEVER disclosed to anyone
+    const sanitizedUserAnnotations = allUserAnnotations.filter(
+      (u) => !u.isDraft || u.annotatorId === userId
+    );
+
     // BLIND REVIEW ENFORCEMENT:
     // If not Admin or Adjudicator and record not adjudicated, hide other users' annotations
     let visibleUserAnnotations: UserAnnotation[] = [];
     if (role === 'Administrator' || role === 'Adjudicator' || r.status === 'adjudicated') {
-      visibleUserAnnotations = allUserAnnotations;
+      visibleUserAnnotations = sanitizedUserAnnotations;
     } else if (myAnnotation) {
       visibleUserAnnotations = [myAnnotation];
     }
@@ -2367,6 +2539,7 @@ export class ScrutinyDatabase {
       normalizedEvidenceValue: r.normalizedEvidenceValue || undefined,
       fieldCategory: r.fieldCategory || undefined,
       sourceProvenance: r.sourceProvenance,
+      isDemoCandidate: Boolean(r.isDemoCandidate),
       originalSourceLabel: r.originalSourceLabel || undefined,
       status: r.status,
       finalLabel: r.finalLabel || undefined,
