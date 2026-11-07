@@ -205,6 +205,52 @@ async function runAnnotationWorkbenchTests() {
     body: { outPath: testExportPath }
   });
 
+  // Create real test documents and register verified institutional dockets
+  const testDocDir = path.resolve(process.cwd(), 'data', `test_wb_docs_${Date.now()}`);
+  fs.mkdirSync(testDocDir, { recursive: true });
+
+  const dummyPdf1 = Buffer.from('%PDF-1.4 Application Statutory Docket for Workbench Test');
+  const wbDocPath1 = path.join(testDocDir, 'wb_app.pdf');
+  fs.writeFileSync(wbDocPath1, dummyPdf1);
+  const wbHash1 = crypto.createHash('sha256').update(dummyPdf1).digest('hex');
+
+  const dummyPdf2 = Buffer.from('%PDF-1.4 Registered Land Lease Deed Document valid 30 years');
+  const wbDocPath2 = path.join(testDocDir, 'wb_evidence.pdf');
+  fs.writeFileSync(wbDocPath2, dummyPdf2);
+  const wbHash2 = crypto.createHash('sha256').update(dummyPdf2).digest('hex');
+
+  const claimDocket = db.createInstitutionalDocket(adminUser, {
+    docketNumber: `DKT-WB-CLAIM-${Date.now()}`,
+    institutionId: 'inst-aicte-wb-101',
+    institutionName: 'Kolkata Institute of Technology & Engineering',
+    sourceOrganization: 'AICTE Eastern Regional Archive 2025-26',
+    authorizationReference: 'AUTH-WB-01',
+    documentChecksum: wbHash1,
+    documentPath: path.relative(process.cwd(), wbDocPath1).replace(/\\/g, '/'),
+    mimeType: 'application/pdf',
+    sizeBytes: dummyPdf1.length,
+    pageCount: 10,
+    organizationId: 'org-aicte-western',
+    provenanceStatus: 'PROVENANCE_VERIFIED',
+    lifecycleState: 'PROVENANCE_VERIFIED'
+  });
+
+  const evidenceDocket = db.createInstitutionalDocket(adminUser, {
+    docketNumber: `DKT-WB-EVID-${Date.now()}`,
+    institutionId: 'inst-aicte-wb-101',
+    institutionName: 'Kolkata Institute of Technology & Engineering',
+    sourceOrganization: 'Revenue Department Government of Maharashtra',
+    authorizationReference: 'AUTH-WB-02',
+    documentChecksum: wbHash2,
+    documentPath: path.relative(process.cwd(), wbDocPath2).replace(/\\/g, '/'),
+    mimeType: 'application/pdf',
+    sizeBytes: dummyPdf2.length,
+    pageCount: 10,
+    organizationId: 'org-aicte-western',
+    provenanceStatus: 'PROVENANCE_VERIFIED',
+    lifecycleState: 'PROVENANCE_VERIFIED'
+  });
+
   try {
     // -------------------------------------------------------------
     // TEST 1: Initial Candidate Seed Integrity & Demo Flagging
@@ -244,9 +290,11 @@ async function runAnnotationWorkbenchTests() {
       institutionName: 'Kolkata Institute of Technology & Engineering',
       claimFieldName: 'fire_safety_noc_validity',
       claimText: 'Fire Safety Certificate valid up to 31/12/2026',
+      claimDocumentId: claimDocket.id,
       claimDocumentName: 'Part-1 Statutory Application Form',
       claimPage: 4,
       evidenceText: 'Fire and Rescue Services Department NOC Certificate valid through 31-Dec-2026',
+      evidenceDocumentId: evidenceDocket.id,
       evidenceDocumentName: 'Fire_Safety_NOC_Certificate.pdf',
       evidencePage: 2,
       evidenceLocation: 'Paragraph 3(b)',
@@ -358,9 +406,11 @@ async function runAnnotationWorkbenchTests() {
         institutionName: 'Apex Institute of Technology',
         claimFieldName: 'society_registration_status',
         claimText: 'Registered under Societies Act XXI of 1860, Valid through 2030',
+        claimDocumentId: claimDocket.id,
         claimDocumentName: 'Statutory_Application_Approval.pdf',
         claimPage: 1,
         evidenceText: 'Certificate renewed annually; current renewal certificate expires 31-03-2026',
+        evidenceDocumentId: evidenceDocket.id,
         evidenceDocumentName: 'Society_Renewal_Certificate.pdf',
         evidencePage: 1,
         fieldCategory: 'entity_name',
@@ -655,9 +705,11 @@ async function runAnnotationWorkbenchTests() {
         institutionName: 'Disputed Institute of Science',
         claimFieldName: 'land_area',
         claimText: '10 Acres',
+        claimDocumentId: claimDocket.id,
         claimDocumentName: 'ValidClaim.pdf',
         claimPage: 1,
         evidenceText: '5 Acres',
+        evidenceDocumentId: evidenceDocket.id,
         evidenceDocumentName: 'ValidEvidence.pdf',
         evidencePage: 1,
         sourceProvenance: 'Genuine Regulatory Filing'
@@ -781,6 +833,9 @@ async function runAnnotationWorkbenchTests() {
     if (fs.existsSync(testManifestPath)) {
       try { fs.unlinkSync(testManifestPath); } catch {}
     }
+    if (fs.existsSync(wbDocPath1)) try { fs.unlinkSync(wbDocPath1); } catch {}
+    if (fs.existsSync(wbDocPath2)) try { fs.unlinkSync(wbDocPath2); } catch {}
+    if (fs.existsSync(testDocDir)) try { fs.rmdirSync(testDocDir); } catch {}
     server.close();
   }
 

@@ -33,6 +33,13 @@ import {
   GENESIS_PREVIOUS_HASH,
   LedgerVerificationResult
 } from './ledger/cryptographicLedger.ts';
+import {
+  createLedgerCheckpoint,
+  verifyLedgerAgainstCheckpoint,
+  LedgerCheckpoint,
+  CheckpointDatabaseFingerprint,
+  CheckpointVerificationResult
+} from './ledger/externalCheckpoint.ts';
 
 export interface DatabaseUser extends User {
   passwordHash: string;
@@ -88,6 +95,9 @@ export class ScrutinyDatabase {
   private initSchema() {
     this.db.exec(`
       PRAGMA foreign_keys = ON;
+      PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
+      PRAGMA synchronous = NORMAL;
 
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -1507,80 +1517,129 @@ export class ScrutinyDatabase {
     const actorRole = event.actorRole || 'Reviewer';
     const organizationId = event.organizationId || 'org-aicte-western';
 
-    // Atomic fetch of previous event for cryptographic hash chaining
-    const latest = this.db.prepare(`
-      SELECT sequenceNumber, currentHash
-      FROM audit_events
-      ORDER BY sequenceNumber DESC, rowid DESC
-      LIMIT 1
-    `).get() as any;
+    const maxRetries = 10;
+    let attempt = 0;
 
-    const sequenceNumber = latest && latest.sequenceNumber ? Number(latest.sequenceNumber) + 1 : 1;
-    const previousHash = (latest && latest.currentHash && latest.currentHash.length === 64) ? latest.currentHash : GENESIS_PREVIOUS_HASH;
+    while (attempt <= maxRetries) {
+      let startedImmediate = false;
+      try {
+        try {
+          this.db.exec('BEGIN IMMEDIATE');
+          startedImmediate = true;
+        } catch (txErr: any) {
+          if (txErr.message && txErr.message.includes('cannot start a transaction within a transaction')) {
+            this.db.exec('SAVEPOINT audit_record_sp');
+          } else {
+            throw txErr;
+          }
+        }
 
-    const payloadHash = computePayloadHash({
-      entityType: event.entityType,
-      entityReference: event.entityReference,
-      beforeValue: event.beforeValue,
-      afterValue: event.afterValue,
-      note: event.note
-    });
+        // Atomic fetch of previous event for cryptographic hash chaining
+        const latest = this.db.prepare(`
+          SELECT sequenceNumber, currentHash
+          FROM audit_events
+          ORDER BY sequenceNumber DESC, rowid DESC
+          LIMIT 1
+        `).get() as any;
 
-    const currentHash = computeEventHash({
-      sequenceNumber,
-      previousHash,
-      id,
-      timestamp,
-      actorId: event.actorId,
-      actorRole,
-      organizationId,
-      action: event.action,
-      payloadHash
-    });
+        const sequenceNumber = latest && latest.sequenceNumber ? Number(latest.sequenceNumber) + 1 : 1;
+        const previousHash = (latest && latest.currentHash && latest.currentHash.length === 64) ? latest.currentHash : GENESIS_PREVIOUS_HASH;
 
-    this.db.prepare(`
-      INSERT INTO audit_events (
-        id, sequenceNumber, timestamp, actorId, actorName, actorRole, organizationId,
-        action, entityType, entityReference, beforeValue, afterValue, note,
-        payloadHash, previousHash, currentHash
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      sequenceNumber,
-      timestamp,
-      event.actorId,
-      event.actorName,
-      actorRole,
-      organizationId,
-      event.action,
-      event.entityType,
-      event.entityReference,
-      event.beforeValue || null,
-      event.afterValue || null,
-      event.note || null,
-      payloadHash,
-      previousHash,
-      currentHash
-    );
+        const payloadHash = computePayloadHash({
+          entityType: event.entityType,
+          entityReference: event.entityReference,
+          beforeValue: event.beforeValue,
+          afterValue: event.afterValue,
+          note: event.note
+        });
 
-    return {
-      id,
-      sequenceNumber,
-      timestamp,
-      actorId: event.actorId,
-      actorName: event.actorName,
-      actorRole,
-      organizationId,
-      action: event.action,
-      entityType: event.entityType,
-      entityReference: event.entityReference,
-      beforeValue: event.beforeValue || null,
-      afterValue: event.afterValue || null,
-      note: event.note || null,
-      payloadHash,
-      previousHash,
-      currentHash
-    };
+        const currentHash = computeEventHash({
+          sequenceNumber,
+          previousHash,
+          id,
+          timestamp,
+          actorId: event.actorId,
+          actorRole,
+          organizationId,
+          action: event.action,
+          payloadHash
+        });
+
+        this.db.prepare(`
+          INSERT INTO audit_events (
+            id, sequenceNumber, timestamp, actorId, actorName, actorRole, organizationId,
+            action, entityType, entityReference, beforeValue, afterValue, note,
+            payloadHash, previousHash, currentHash
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id,
+          sequenceNumber,
+          timestamp,
+          event.actorId,
+          event.actorName,
+          actorRole,
+          organizationId,
+          event.action,
+          event.entityType,
+          event.entityReference,
+          event.beforeValue || null,
+          event.afterValue || null,
+          event.note || null,
+          payloadHash,
+          previousHash,
+          currentHash
+        );
+
+        if (startedImmediate) {
+          this.db.exec('COMMIT');
+        } else {
+          this.db.exec('RELEASE SAVEPOINT audit_record_sp');
+        }
+
+        return {
+          id,
+          sequenceNumber,
+          timestamp,
+          actorId: event.actorId,
+          actorName: event.actorName,
+          actorRole,
+          organizationId,
+          action: event.action,
+          entityType: event.entityType,
+          entityReference: event.entityReference,
+          beforeValue: event.beforeValue || null,
+          afterValue: event.afterValue || null,
+          note: event.note || null,
+          payloadHash,
+          previousHash,
+          currentHash
+        };
+      } catch (err: any) {
+        if (startedImmediate) {
+          try { this.db.exec('ROLLBACK'); } catch {}
+        } else {
+          try {
+            this.db.exec('ROLLBACK TO SAVEPOINT audit_record_sp');
+            this.db.exec('RELEASE SAVEPOINT audit_record_sp');
+          } catch {}
+        }
+
+        const isBusy = err.message && (
+          err.message.includes('busy') ||
+          err.message.includes('locked') ||
+          err.message.includes('SQLITE_BUSY')
+        );
+
+        if (isBusy && attempt < maxRetries) {
+          attempt++;
+          const backoffMs = Math.floor(15 * Math.pow(1.4, attempt) + Math.random() * 20);
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoffMs);
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('Cryptographic Ledger Invariant: Exceeded maximum retries attempting to record atomic audit event.');
   }
 
   verifyLedgerChain(organizationId?: string): LedgerVerificationResult {
@@ -1674,6 +1733,58 @@ export class ScrutinyDatabase {
       // Non-entity or rule-level actions are general platform events
       return true;
     });
+  }
+
+  getAllAuditEvents(): AuditEvent[] {
+    const rows = this.db.prepare('SELECT * FROM audit_events ORDER BY sequenceNumber ASC').all() as any[];
+    return rows.map(r => ({
+      id: r.id,
+      sequenceNumber: Number(r.sequenceNumber || 1),
+      timestamp: r.timestamp,
+      actorId: r.actorId,
+      actorName: r.actorName,
+      actorRole: r.actorRole || 'Reviewer',
+      organizationId: r.organizationId || 'org-aicte-western',
+      action: r.action,
+      entityType: r.entityType,
+      entityReference: r.entityReference,
+      beforeValue: r.beforeValue,
+      afterValue: r.afterValue,
+      note: r.note,
+      payloadHash: r.payloadHash,
+      previousHash: r.previousHash,
+      currentHash: r.currentHash
+    }));
+  }
+
+  getDatabaseFingerprint(): CheckpointDatabaseFingerprint {
+    const userCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM users').get() as any)?.c || 0);
+    const docketCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM institutional_dockets').get() as any)?.c || 0);
+    const candidateCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM annotation_records').get() as any)?.c || 0);
+    const decisionCount = Number((this.db.prepare('SELECT COUNT(*) as c FROM application_decisions').get() as any)?.c || 0);
+    return { userCount, docketCount, candidateCount, decisionCount };
+  }
+
+  createLedgerCheckpoint(options?: { keyId?: string; signingSecret?: string; checkpointDir?: string }): LedgerCheckpoint {
+    const events = this.getAllAuditEvents();
+    const fingerprint = this.getDatabaseFingerprint();
+    return createLedgerCheckpoint(events, fingerprint, options);
+  }
+
+  checkpoint(): void {
+    try {
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch {}
+  }
+
+  close(): void {
+    this.checkpoint();
+    this.db.close();
+  }
+
+  verifyLedgerAgainstCheckpoint(checkpoint: LedgerCheckpoint, secretKey?: string): CheckpointVerificationResult {
+    const events = this.getAllAuditEvents();
+    return verifyLedgerAgainstCheckpoint(events, checkpoint, secretKey);
   }
 
   // --- REVIEWER AUTHORIZATION & ACCREDITATION GOVERNANCE ---
@@ -1905,7 +2016,9 @@ export class ScrutinyDatabase {
 
     const id = `dkt-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
-    const orgId = uploader.organizationId || data.organizationId || 'org-aicte-western';
+    const orgId = (uploader.role === 'Administrator' && data.organizationId)
+      ? data.organizationId
+      : (uploader.organizationId || data.organizationId || 'org-aicte-western');
     const documentChecksum = data.documentChecksum || crypto.createHash('sha256').update(data.documentPath || id).digest('hex');
     const pageCount = Number(data.pageCount || 1);
     const sizeBytes = Number(data.sizeBytes || 1024);
@@ -2073,6 +2186,15 @@ export class ScrutinyDatabase {
       throw new Error('Cross-tenant violation: Cannot verify provenance of docket belonging to another regional directorate.');
     }
 
+    // GAP-SEC-02 Remediation: Physical document verification against stored files
+    if (status === 'PROVENANCE_VERIFIED' && docket.documentPath && fs.existsSync(docket.documentPath)) {
+      const fileBytes = fs.readFileSync(docket.documentPath);
+      const computedChecksum = crypto.createHash('sha256').update(fileBytes).digest('hex');
+      if (computedChecksum.toLowerCase() !== docket.documentChecksum.toLowerCase()) {
+        throw new Error(`Physical document SHA-256 verification failed: computed ${computedChecksum} does not match recorded ${docket.documentChecksum}.`);
+      }
+    }
+
     const now = new Date().toISOString();
     const nextState: InstitutionalDocketLifecycle = status === 'PROVENANCE_VERIFIED' ? 'PROVENANCE_VERIFIED' : 'PROVENANCE_REJECTED';
 
@@ -2082,6 +2204,7 @@ export class ScrutinyDatabase {
       WHERE id = ?
     `).run(status, verifier.id, now, notes.trim(), nextState, now, docketId);
 
+    // GAP-SEC-02 Remediation: Include physical document SHA-256, page count, authorization reference, and docket ID in canonical provenance audit event
     this.recordAudit({
       actorId: verifier.id,
       actorName: verifier.displayName,
@@ -2090,8 +2213,21 @@ export class ScrutinyDatabase {
       action: 'Docket Provenance Verified',
       entityType: 'InstitutionalDocket',
       entityReference: docketId,
-      beforeValue: docket.provenanceStatus,
-      afterValue: status,
+      beforeValue: JSON.stringify({
+        provenanceStatus: docket.provenanceStatus,
+        lifecycleState: docket.lifecycleState
+      }),
+      afterValue: JSON.stringify({
+        docketId: docket.id,
+        docketNumber: docket.docketNumber,
+        provenanceStatus: status,
+        lifecycleState: nextState,
+        documentChecksum: docket.documentChecksum,
+        pageCount: docket.pageCount,
+        authorizationReference: docket.authorizationReference,
+        verifiedBy: verifier.id,
+        verifiedAt: now
+      }),
       note: notes.trim()
     });
 
@@ -3150,21 +3286,25 @@ export class ScrutinyDatabase {
     const jsonlRows: string[] = [];
     const rejectionReasons: { recordId: string; reasons: string[] }[] = [];
 
-    // Helper to resolve document from institutional_dockets or documents
-    const resolveDoc = (docId?: string, docName?: string) => {
-      if (docId) {
-        const dkt = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ? OR docketNumber = ?').get(docId, docId) as any;
-        if (dkt) return { type: 'docket' as const, doc: dkt };
-        const doc = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(docId) as any;
-        if (doc) return { type: 'document' as const, doc };
+    // Helper to resolve document strictly by ID from institutional_dockets or documents
+    const resolveDocById = (docId: string): { type: 'docket' | 'document'; doc: any } | null => {
+      if (!docId || typeof docId !== 'string' || docId.trim().length === 0) {
+        return null;
       }
-      if (docName) {
-        const dkt = this.db.prepare('SELECT * FROM institutional_dockets WHERE docketNumber = ? OR documentPath LIKE ?').get(docName, `%${docName}%`) as any;
-        if (dkt) return { type: 'docket' as const, doc: dkt };
-        const doc = this.db.prepare('SELECT * FROM documents WHERE originalFilename = ?').get(docName) as any;
-        if (doc) return { type: 'document' as const, doc };
-      }
+      const trimmedId = docId.trim();
+      const dkt = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ? OR docketNumber = ?').get(trimmedId, trimmedId) as any;
+      if (dkt) return { type: 'docket' as const, doc: dkt };
+      const doc = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(trimmedId) as any;
+      if (doc) return { type: 'document' as const, doc };
       return null;
+    };
+
+    const resolveDocOrg = (item: { type: 'docket' | 'document'; doc: any }): string | null => {
+      if (item.type === 'docket') {
+        return item.doc.organizationId || null;
+      }
+      const app = this.db.prepare('SELECT organizationId FROM applications WHERE id = ?').get(item.doc.applicationId) as any;
+      return app?.organizationId || null;
     };
 
     for (const r of records) {
@@ -3186,26 +3326,75 @@ export class ScrutinyDatabase {
         reasons.push('Record status is quarantined.');
       }
 
-      // Resolve documents for Gates 2, 3, 4, 5, 15
-      const claimResolved = resolveDoc(r.claimDocumentId, r.claimDocumentName);
-      const evidenceResolved = resolveDoc(r.evidenceDocumentId, r.evidenceDocumentName);
+      // GATE 2: Identifiable Source Document Citations, Existence & Access
+      let claimResolved: { type: 'docket' | 'document'; doc: any } | null = null;
+      const rawClaimId = (r.claimDocumentId && typeof r.claimDocumentId === 'string') ? r.claimDocumentId.trim() : '';
+      const rawClaimName = (r.claimDocumentName && typeof r.claimDocumentName === 'string') ? r.claimDocumentName.trim() : '';
 
-      // GATE 2: Identifiable Source Document Citations & Existence
-      const hasClaimDoc = Boolean(r.claimDocumentId || (r.claimDocumentName && r.claimDocumentName.trim().length > 0));
-      const hasEvidenceDoc = Boolean(r.evidenceDocumentId || (r.evidenceDocumentName && r.evidenceDocumentName.trim().length > 0));
-      if (!hasClaimDoc || !hasEvidenceDoc) {
-        reasons.push('Missing identifiable source document citation for claim or evidence.');
+      if (rawClaimId.length === 0) {
+        if (rawClaimName.length > 0) {
+          reasons.push(`Gate 2 Failed: Non-empty claim document name '${rawClaimName}' provided without required claimDocumentId. Every candidate referencing a claim document must contain a valid claimDocumentId.`);
+        } else {
+          reasons.push('Gate 2 Failed: Missing identifiable source document citation for claim (claimDocumentId is missing).');
+        }
+      } else {
+        claimResolved = resolveDocById(rawClaimId);
+        if (!claimResolved) {
+          reasons.push(`Gate 2 Failed: Referenced claim document ID '${rawClaimId}' does not exist, has been deleted, or is inaccessible in institutional registry.`);
+        } else {
+          if (claimResolved.type === 'docket') {
+            const forbiddenStates = ['ACCESS_DENIED', 'PROVENANCE_REJECTED', 'QUARANTINED', 'DEMO_FIXTURE', 'SYNTHETIC_DATA', 'DELETED', 'ARCHIVED'];
+            if (forbiddenStates.includes(claimResolved.doc.lifecycleState)) {
+              reasons.push(`Gate 2 Failed: Referenced claim document ID '${rawClaimId}' is inaccessible (lifecycle state: ${claimResolved.doc.lifecycleState}).`);
+            }
+          }
+          const claimDocOrg = resolveDocOrg(claimResolved);
+          if (claimDocOrg && r.organizationId && claimDocOrg !== r.organizationId) {
+            reasons.push(`Gate 2 Failed: Cross-tenant document reference: claim document belongs to organization '${claimDocOrg}' but candidate belongs to '${r.organizationId}'.`);
+          }
+          if (options?.organizationId && options?.role !== 'Administrator' && claimDocOrg && claimDocOrg !== options.organizationId) {
+            reasons.push(`Gate 2 Failed: Cross-tenant document access: claim document organization '${claimDocOrg}' does not match caller organization '${options.organizationId}'.`);
+          }
+        }
       }
-      if (r.claimDocumentId && !claimResolved) {
-        reasons.push(`Referenced claim document ID '${r.claimDocumentId}' not found in institutional registry.`);
-      }
-      if (r.evidenceDocumentId && !evidenceResolved) {
-        reasons.push(`Referenced evidence document ID '${r.evidenceDocumentId}' not found in institutional registry.`);
+
+      let evidenceResolved: { type: 'docket' | 'document'; doc: any } | null = null;
+      const rawEvidenceId = (r.evidenceDocumentId && typeof r.evidenceDocumentId === 'string') ? r.evidenceDocumentId.trim() : '';
+      const rawEvidenceName = (r.evidenceDocumentName && typeof r.evidenceDocumentName === 'string') ? r.evidenceDocumentName.trim() : '';
+
+      if (rawEvidenceId.length === 0) {
+        if (rawEvidenceName.length > 0) {
+          reasons.push(`Gate 2 Failed: Non-empty evidence document name '${rawEvidenceName}' provided without required evidenceDocumentId. Every candidate referencing an evidence document must contain a valid evidenceDocumentId.`);
+        } else {
+          reasons.push('Gate 2 Failed: Missing identifiable source document citation for evidence (evidenceDocumentId is missing).');
+        }
+      } else {
+        evidenceResolved = resolveDocById(rawEvidenceId);
+        if (!evidenceResolved) {
+          reasons.push(`Gate 2 Failed: Referenced evidence document ID '${rawEvidenceId}' does not exist, has been deleted, or is inaccessible in institutional registry.`);
+        } else {
+          if (evidenceResolved.type === 'docket') {
+            const forbiddenStates = ['ACCESS_DENIED', 'PROVENANCE_REJECTED', 'QUARANTINED', 'DEMO_FIXTURE', 'SYNTHETIC_DATA', 'DELETED', 'ARCHIVED'];
+            if (forbiddenStates.includes(evidenceResolved.doc.lifecycleState)) {
+              reasons.push(`Gate 2 Failed: Referenced evidence document ID '${rawEvidenceId}' is inaccessible (lifecycle state: ${evidenceResolved.doc.lifecycleState}).`);
+            }
+          }
+          const evidenceDocOrg = resolveDocOrg(evidenceResolved);
+          if (evidenceDocOrg && r.organizationId && evidenceDocOrg !== r.organizationId) {
+            reasons.push(`Gate 2 Failed: Cross-tenant document reference: evidence document belongs to organization '${evidenceDocOrg}' but candidate belongs to '${r.organizationId}'.`);
+          }
+          if (options?.organizationId && options?.role !== 'Administrator' && evidenceDocOrg && evidenceDocOrg !== options.organizationId) {
+            reasons.push(`Gate 2 Failed: Cross-tenant document access: evidence document organization '${evidenceDocOrg}' does not match caller organization '${options.organizationId}'.`);
+          }
+        }
       }
 
       // GATE 3: Both document checksums verify (if document binary is registered on disk)
-      const verifyDocChecksum = (item: { type: 'docket' | 'document'; doc: any } | null, label: string) => {
-        if (!item) return;
+      const verifyDocChecksum = (item: { type: 'docket' | 'document'; doc: any } | null, label: 'Claim' | 'Evidence') => {
+        if (!item) {
+          reasons.push(`Gate 3 Failed: Cannot verify checksum for ${label} document because document record could not be resolved.`);
+          return;
+        }
         const filePath = item.type === 'docket'
           ? path.resolve(process.cwd(), item.doc.documentPath)
           : (path.isAbsolute(item.doc.storageKey)
@@ -3218,45 +3407,56 @@ export class ScrutinyDatabase {
             const actualHash = crypto.createHash('sha256').update(fileBytes).digest('hex').toLowerCase();
             const expectedClean = expectedChecksum.replace(/^sha256-/, '');
             if (expectedClean && !actualHash.startsWith(expectedClean) && !expectedClean.startsWith(actualHash)) {
-              reasons.push(`${label} document checksum verification failed: expected ${expectedClean}, computed ${actualHash}.`);
+              reasons.push(`Gate 3 Failed: ${label} document checksum verification failed: expected ${expectedClean}, computed ${actualHash}.`);
             }
           } catch {
-            reasons.push(`Failed to read ${label} document binary for checksum recalculation.`);
+            reasons.push(`Gate 3 Failed: Failed to read ${label} document binary for checksum recalculation.`);
           }
         } else if (item.type === 'docket') {
-          reasons.push(`${label} institutional docket physical file missing at: ${item.doc.documentPath}.`);
+          reasons.push(`Gate 3 Failed: ${label} institutional docket physical file missing at: ${item.doc.documentPath}.`);
         }
       };
       verifyDocChecksum(claimResolved, 'Claim');
       verifyDocChecksum(evidenceResolved, 'Evidence');
 
       // GATE 4: Source Provenance Verified
-      if (claimResolved) {
+      if (!claimResolved) {
+        reasons.push('Gate 4 Failed: Cannot verify claim document provenance because claim document record is unresolved.');
+      } else {
         const prov = claimResolved.doc.provenanceStatus;
-        if (prov === 'PROVENANCE_PENDING' || prov === 'PROVENANCE_REJECTED') {
-          reasons.push(`Claim document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
+        if (prov !== 'PROVENANCE_VERIFIED') {
+          reasons.push(`Gate 4 Failed: Claim document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
         }
       }
-      if (evidenceResolved) {
+
+      if (!evidenceResolved) {
+        reasons.push('Gate 4 Failed: Cannot verify evidence document provenance because evidence document record is unresolved.');
+      } else {
         const prov = evidenceResolved.doc.provenanceStatus;
-        if (prov === 'PROVENANCE_PENDING' || prov === 'PROVENANCE_REJECTED') {
-          reasons.push(`Evidence document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
+        if (prov !== 'PROVENANCE_VERIFIED') {
+          reasons.push(`Gate 4 Failed: Evidence document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
         }
       }
-      if (r.provenanceStatus && (r.provenanceStatus === 'PROVENANCE_PENDING' || r.provenanceStatus === 'PROVENANCE_REJECTED')) {
-        reasons.push(`Candidate provenance status '${r.provenanceStatus}' is not verified.`);
+
+      if (r.provenanceStatus && r.provenanceStatus !== 'PROVENANCE_VERIFIED') {
+        reasons.push(`Gate 4 Failed: Candidate provenance status '${r.provenanceStatus}' is not verified.`);
       }
 
       // GATE 5: Page references must be valid positive integers within page count
       if (r.claimPage === null || r.claimPage === undefined || Number(r.claimPage) < 1) {
-        reasons.push('Missing or invalid application docket page citation.');
-      } else if (claimResolved && claimResolved.doc.pageCount > 0 && Number(r.claimPage) > claimResolved.doc.pageCount) {
-        reasons.push(`Claim page ${r.claimPage} exceeds document page count (${claimResolved.doc.pageCount}).`);
+        reasons.push('Gate 5 Failed: Missing or invalid application docket page citation (claimPage).');
+      } else if (!claimResolved) {
+        reasons.push('Gate 5 Failed: Cannot validate claim page bounds because claim document record is unresolved.');
+      } else if (claimResolved.doc.pageCount > 0 && Number(r.claimPage) > claimResolved.doc.pageCount) {
+        reasons.push(`Gate 5 Failed: Claim page ${r.claimPage} exceeds document page count (${claimResolved.doc.pageCount}).`);
       }
+
       if (r.evidencePage === null || r.evidencePage === undefined || Number(r.evidencePage) < 1) {
-        reasons.push('Missing or invalid supporting evidence docket page citation.');
-      } else if (evidenceResolved && evidenceResolved.doc.pageCount > 0 && Number(r.evidencePage) > evidenceResolved.doc.pageCount) {
-        reasons.push(`Evidence page ${r.evidencePage} exceeds document page count (${evidenceResolved.doc.pageCount}).`);
+        reasons.push('Gate 5 Failed: Missing or invalid supporting evidence docket page citation (evidencePage).');
+      } else if (!evidenceResolved) {
+        reasons.push('Gate 5 Failed: Cannot validate evidence page bounds because evidence document record is unresolved.');
+      } else if (evidenceResolved.doc.pageCount > 0 && Number(r.evidencePage) > evidenceResolved.doc.pageCount) {
+        reasons.push(`Gate 5 Failed: Evidence page ${r.evidencePage} exceeds document page count (${evidenceResolved.doc.pageCount}).`);
       }
 
       // GATE 6: Evidence references resolve to actual source content
@@ -3348,15 +3548,41 @@ export class ScrutinyDatabase {
         }
       }
 
-      // GATE 15: No Source Document or Candidate Under Quarantine
+      // GATE 15: Fresh Physical Checksum Re-verification (TOCTOU) & No Quarantine
       if (r.status === 'quarantined' || (r.sourceProvenance && r.sourceProvenance.toLowerCase().includes('quarantine'))) {
-        reasons.push('Candidate record is marked as quarantined.');
+        reasons.push('Gate 15 Failed: Candidate record is marked as quarantined.');
       }
-      if (claimResolved && (claimResolved.doc.provenanceStatus === 'QUARANTINED' || claimResolved.doc.lifecycleState === 'QUARANTINED' || claimResolved.doc.documentClassification === 'quarantined')) {
-        reasons.push('Claim source document is quarantined.');
+      if (claimResolved) {
+        if (claimResolved.doc.provenanceStatus === 'QUARANTINED' || claimResolved.doc.lifecycleState === 'QUARANTINED' || claimResolved.doc.documentClassification === 'quarantined') {
+          reasons.push('Gate 15 Failed: Claim source document is quarantined.');
+        }
+        if (claimResolved.type === 'docket' && claimResolved.doc.documentPath) {
+          const pPath = path.resolve(process.cwd(), claimResolved.doc.documentPath);
+          if (fs.existsSync(pPath)) {
+            const currentBytes = fs.readFileSync(pPath);
+            const currentHash = crypto.createHash('sha256').update(currentBytes).digest('hex').toLowerCase();
+            const expected = (claimResolved.doc.documentChecksum || '').toLowerCase().replace(/^sha256-/, '');
+            if (expected && currentHash !== expected) {
+              reasons.push(`Gate 15 Failed: Physical claim document file checksum has mutated since verification (expected: ${expected}, current: ${currentHash}).`);
+            }
+          }
+        }
       }
-      if (evidenceResolved && (evidenceResolved.doc.provenanceStatus === 'QUARANTINED' || evidenceResolved.doc.lifecycleState === 'QUARANTINED' || evidenceResolved.doc.documentClassification === 'quarantined')) {
-        reasons.push('Evidence source document is quarantined.');
+      if (evidenceResolved) {
+        if (evidenceResolved.doc.provenanceStatus === 'QUARANTINED' || evidenceResolved.doc.lifecycleState === 'QUARANTINED' || evidenceResolved.doc.documentClassification === 'quarantined') {
+          reasons.push('Gate 15 Failed: Evidence source document is quarantined.');
+        }
+        if (evidenceResolved.type === 'docket' && evidenceResolved.doc.documentPath) {
+          const pPath = path.resolve(process.cwd(), evidenceResolved.doc.documentPath);
+          if (fs.existsSync(pPath)) {
+            const currentBytes = fs.readFileSync(pPath);
+            const currentHash = crypto.createHash('sha256').update(currentBytes).digest('hex').toLowerCase();
+            const expected = (evidenceResolved.doc.documentChecksum || '').toLowerCase().replace(/^sha256-/, '');
+            if (expected && currentHash !== expected) {
+              reasons.push(`Gate 15 Failed: Physical evidence document file checksum has mutated since verification (expected: ${expected}, current: ${currentHash}).`);
+            }
+          }
+        }
       }
 
       // If any gate failed, reject and record reasons
@@ -3376,12 +3602,12 @@ export class ScrutinyDatabase {
         claim: {
           text: r.claimText,
           field_name: r.claimFieldName,
-          source_document_id: r.claimDocumentId || r.claimDocumentName,
+          source_document_id: r.claimDocumentId,
           page: Number(r.claimPage)
         },
         evidence: {
           text: r.evidenceText,
-          source_document_id: r.evidenceDocumentId || r.evidenceDocumentName,
+          source_document_id: r.evidenceDocumentId,
           page: Number(r.evidencePage)
         },
         comparison: {

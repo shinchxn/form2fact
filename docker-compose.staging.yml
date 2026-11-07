@@ -1,0 +1,78 @@
+name: form2fact-staging
+
+services:
+  # =========================================================================
+  # 1. Staging Core Scrutiny API & React UI
+  # =========================================================================
+  staging-api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: form2fact-staging-api-server
+    restart: unless-stopped
+    ports:
+      - "${STAGING_PORT:-3001}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${STAGING_JWT_SECRET:-staging_rehearsal_jwt_secret_min_32_characters_long!}
+      - BOOTSTRAP_SECRET=${STAGING_BOOTSTRAP_SECRET:-staging_bootstrap_secret_2026_pilot_rehearsal!}
+      - LEDGER_SIGNING_KEY=${STAGING_LEDGER_SIGNING_KEY:-staging_ledger_hmac_secret_32_characters_minimum!}
+      - LEDGER_SIGNING_KEY_ID=staging-key-2026-rehearsal
+      - DATABASE_PATH=/app/data/form2fact_staging.db
+      - DOCUMENT_STORAGE_PATH=/app/data/dockets_staging
+      - AI_SERVICE_URL=http://staging-ai-service:8000
+      - REQUIRE_ML_INFERENCE=true
+      - ALLOW_DETERMINISTIC_FALLBACK=false
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_staging_data:/app/data
+    networks:
+      - form2fact-staging-net
+    depends_on:
+      staging-ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =========================================================================
+  # 2. Staging Python AI Inference & Document Intelligence Microservice
+  # =========================================================================
+  staging-ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: form2fact-staging-ai-service
+    restart: unless-stopped
+    environment:
+      - PORT=8000
+      - WORKERS=2
+      - MODEL_PATH=/app/models
+      - MODEL_VERSION=v2.0-champion
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - form2fact_staging_models:/app/models
+    networks:
+      - form2fact-staging-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  form2fact_staging_data:
+    name: form2fact_staging_data
+  form2fact_staging_models:
+    name: form2fact_staging_models
+
+networks:
+  form2fact-staging-net:
+    name: form2fact-staging-network
+    driver: bridge
+

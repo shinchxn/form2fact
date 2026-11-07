@@ -768,8 +768,10 @@ async function runDataIntegritySuite() {
     const reloadedApps = reloadedDb.getAllApplications();
     testAssert(reloadedApps.length >= 1, 'Genuine application records persist across restart');
     testAssert(reloadedApps.some(a => a.id === realApp.id), 'Persistent record ID matches original');
+    reloadedDb.close();
 
     // Test Database Backup & Restore Integrity
+    db.checkpoint();
     const backupDbPath = path.resolve(process.cwd(), 'data', `test-backup-${Date.now()}.db`);
     try {
       fs.copyFileSync(testDbPath, backupDbPath);
@@ -777,9 +779,13 @@ async function runDataIntegritySuite() {
       testAssert(restoredDb.getAllApplications().length >= 1, 'Restored database retains application records');
       testAssert(restoredDb.getDocumentsByApplication(realApp.id).length === 1, 'Restored database retains document records');
       testAssert(restoredDb.getAuditEvents().length >= 2, 'Restored database retains audit ledger history');
-      restoredDb.db.close();
+      restoredDb.close();
     } finally {
-      if (fs.existsSync(backupDbPath)) fs.unlinkSync(backupDbPath);
+      if (fs.existsSync(backupDbPath)) {
+        try { fs.unlinkSync(backupDbPath); } catch {}
+        try { fs.unlinkSync(backupDbPath + '-wal'); } catch {}
+        try { fs.unlinkSync(backupDbPath + '-shm'); } catch {}
+      }
     }
 
     rawSqlite.close();

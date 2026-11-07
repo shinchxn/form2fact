@@ -48,10 +48,17 @@ export interface CohenKappaResult {
  * Mathematical Formulation:
  *   kappa = (po - pe) / (1 - pe)
  * 
- * Strict Boundary Conditions:
+ * Strict Boundary & Statistical Invariants:
  * - When N = 0: returns kappa: null, undefinedReason: 'no_paired_annotations'.
  * - When 1 - pe == 0: returns kappa: null, undefinedReason: 'denominator_zero_chance_agreement_one'.
- *   Never silently returns 0.0 or 1.0 when the denominator is zero.
+ *   Never silently returns 0.0 or 1.0 when the denominator is zero. Perfect agreement across
+ *   degenerate marginals (e.g. all raters choosing the identical single class) produces pe = 1.0,
+ *   rendering kappa indeterminate (0/0); it must remain strictly null.
+ * - Non-degenerate perfect agreement (where multiple classes are utilized and 1 - pe > 0)
+ *   yields a mathematically valid kappa of 1.0.
+ * - Complete disagreement with balanced marginals yields a mathematically valid negative kappa.
+ * - Sample size N >= 30 is an empirical rule-of-thumb / heuristic and does NOT constitute
+ *   a universal guarantee of statistical power or confidence interval stability.
  * - Enforces independent evaluators (annotator1Id !== annotator2Id).
  * - Enforces valid 5-class taxonomy labels.
  */
@@ -164,7 +171,7 @@ export function computeCohensKappa(pairs: AnnotationPairInput[]): CohenKappaResu
   if (Math.abs(1 - pe) < 1e-9) {
     return {
       kappa: null,
-      interpretation: 'Undefined: Expected chance agreement equals 1.0 (zero category variance across pairs).',
+      interpretation: 'Undefined: Expected chance agreement equals 1.0 (zero category variance across pairs; denominator is zero and kappa cannot be evaluated).',
       undefinedReason: 'denominator_zero_chance_agreement_one',
       po: Math.round(po * 1000) / 1000,
       pe: Math.round(pe * 1000) / 1000,
@@ -192,7 +199,7 @@ export function computeCohensKappa(pairs: AnnotationPairInput[]): CohenKappaResu
   else interpretation = 'Poor / Systematic Divergence';
 
   if (!isSampleSizeSufficient) {
-    interpretation += ` (Advisory: sample size N=${N} < 30 carries high statistical variance)`;
+    interpretation += ` (Advisory: sample size N=${N} < 30 carries high statistical variance; N>=30 is an empirical heuristic, not a universal guarantee)`;
   }
 
   return {

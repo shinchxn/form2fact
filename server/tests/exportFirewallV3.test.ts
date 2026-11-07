@@ -205,6 +205,186 @@ async function runExportFirewallTests() {
     testAssert(isRejected, 'Missing document candidate rejected by Gate 2');
   });
 
+  // TEST 2B: Gate 2 — Non-empty Document Name with Null/Missing Document ID
+  runTest('Gate 2: Rejection of record with non-empty claim document name but null claimDocumentId', () => {
+    const nullIdCand = db.createAnnotationRecord({
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      claimFieldName: 'land_area',
+      claimText: '10 Acres',
+      claimDocumentId: undefined, // Null / missing ID
+      claimDocumentName: 'Apex_Lease_Deed.pdf', // Non-empty metadata name
+      claimPage: 1,
+      evidenceText: '10 Acres',
+      evidenceDocumentId: evidenceDocket.id,
+      evidencePage: 1,
+      isDemoCandidate: false
+    });
+
+    db.saveUserAnnotation(nullIdCand.id, annotator1, { label: 'MATCH', rationale: 'Claim matches evidence document.', isDraft: false });
+    db.saveUserAnnotation(nullIdCand.id, annotator2, { label: 'MATCH', rationale: 'Claim matches evidence document too.', isDraft: false });
+
+    const exportRes = db.exportGoldStandard({ outPath: testOutPath });
+    const isRejected = exportRes.rejectionReasons.some(r => r.recordId === nullIdCand.recordId && r.reasons.some(re => re.includes('without required claimDocumentId')));
+    testAssert(isRejected, 'Null document ID with non-empty document name strictly rejected by Gate 2');
+  });
+
+  // TEST 2C: Gate 2 — Invalid / Non-Existent Document ID
+  runTest('Gate 2: Rejection of record with invalid non-existent document ID', () => {
+    const invalidIdCand = db.createAnnotationRecord({
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      claimFieldName: 'land_area',
+      claimText: '10 Acres',
+      claimDocumentId: 'dkt-nonexistent-99999',
+      claimPage: 1,
+      evidenceText: '10 Acres',
+      evidenceDocumentId: evidenceDocket.id,
+      evidencePage: 1,
+      isDemoCandidate: false
+    });
+
+    db.saveUserAnnotation(invalidIdCand.id, annotator1, { label: 'MATCH', rationale: 'Claim matches evidence document.', isDraft: false });
+    db.saveUserAnnotation(invalidIdCand.id, annotator2, { label: 'MATCH', rationale: 'Claim matches evidence document too.', isDraft: false });
+
+    const exportRes = db.exportGoldStandard({ outPath: testOutPath });
+    const isRejected = exportRes.rejectionReasons.some(r => r.recordId === invalidIdCand.recordId && r.reasons.some(re => re.includes('does not exist, has been deleted, or is inaccessible')));
+    testAssert(isRejected, 'Invalid document ID strictly rejected by Gate 2');
+  });
+
+  // TEST 2D: Gate 2 — Deleted Document Reference
+  runTest('Gate 2: Rejection of record referencing a deleted document', () => {
+    const tempDocket = db.createInstitutionalDocket(adminUser, {
+      docketNumber: `DKT-TEMP-DEL-${Date.now()}`,
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      sourceOrganization: 'AICTE Western Regional Office',
+      authorizationReference: 'AUTH-TEMP-DEL',
+      documentChecksum: hash1,
+      documentPath: path.relative(process.cwd(), docPath1).replace(/\\/g, '/'),
+      mimeType: 'application/pdf',
+      sizeBytes: dummyPdfContent1.length,
+      pageCount: 10,
+      organizationId: 'org-aicte-western',
+      provenanceStatus: 'PROVENANCE_VERIFIED',
+      lifecycleState: 'PROVENANCE_VERIFIED'
+    });
+
+    const deletedDocCand = db.createAnnotationRecord({
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      claimFieldName: 'land_area',
+      claimText: '10 Acres',
+      claimDocumentId: tempDocket.id,
+      claimPage: 1,
+      evidenceText: '10 Acres',
+      evidenceDocumentId: evidenceDocket.id,
+      evidencePage: 1,
+      isDemoCandidate: false
+    });
+
+    db.saveUserAnnotation(deletedDocCand.id, annotator1, { label: 'MATCH', rationale: 'Claim matches evidence document.', isDraft: false });
+    db.saveUserAnnotation(deletedDocCand.id, annotator2, { label: 'MATCH', rationale: 'Claim matches evidence document too.', isDraft: false });
+
+    // Physically delete the docket from the database
+    (db as any).db.prepare('DELETE FROM institutional_dockets WHERE id = ?').run(tempDocket.id);
+
+    const exportRes = db.exportGoldStandard({ outPath: testOutPath });
+    const isRejected = exportRes.rejectionReasons.some(r => r.recordId === deletedDocCand.recordId && r.reasons.some(re => re.includes('does not exist, has been deleted, or is inaccessible')));
+    testAssert(isRejected, 'Deleted document candidate strictly rejected by Gate 2');
+  });
+
+  // TEST 2E: Gate 2 — Cross-Tenant Document Reference
+  runTest('Gate 2: Rejection of cross-tenant document reference', () => {
+    const northernDocket = db.createInstitutionalDocket(adminUser, {
+      docketNumber: `DKT-NORTH-${Date.now()}`,
+      institutionId: 'inst-north-001',
+      institutionName: 'Northern Tech College',
+      sourceOrganization: 'AICTE Northern Regional Office',
+      authorizationReference: 'AUTH-NORTH-01',
+      documentChecksum: hash1,
+      documentPath: path.relative(process.cwd(), docPath1).replace(/\\/g, '/'),
+      mimeType: 'application/pdf',
+      sizeBytes: dummyPdfContent1.length,
+      pageCount: 10,
+      organizationId: 'org-aicte-northern',
+      provenanceStatus: 'PROVENANCE_VERIFIED',
+      lifecycleState: 'PROVENANCE_VERIFIED'
+    });
+
+    const crossTenantDocCand = db.createAnnotationRecord({
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      claimFieldName: 'land_area',
+      claimText: '10 Acres',
+      claimDocumentId: northernDocket.id,
+      claimPage: 1,
+      evidenceText: '10 Acres',
+      evidenceDocumentId: evidenceDocket.id,
+      evidencePage: 1,
+      isDemoCandidate: false,
+      organizationId: 'org-aicte-western'
+    });
+
+    db.saveUserAnnotation(crossTenantDocCand.id, annotator1, { label: 'MATCH', rationale: 'Claim matches evidence document.', isDraft: false });
+    db.saveUserAnnotation(crossTenantDocCand.id, annotator2, { label: 'MATCH', rationale: 'Claim matches evidence document too.', isDraft: false });
+
+    const exportRes = db.exportGoldStandard({ outPath: testOutPath });
+    const isRejected = exportRes.rejectionReasons.some(r => r.recordId === crossTenantDocCand.recordId && r.reasons.some(re => re.includes('Cross-tenant document reference')));
+    testAssert(isRejected, 'Cross-tenant document candidate strictly rejected by Gate 2');
+  });
+
+  // TEST 2F: Gate 15 — Document Replacement Before Export (TOCTOU)
+  runTest('Gate 15: Rejection when physical document file is mutated before export (TOCTOU)', () => {
+    const toctouDocFile = path.join(testDocDir, `toctou_doc_${Date.now()}.pdf`);
+    const initialBytes = Buffer.from('%PDF-1.4 Initial Genuine Scrutiny Docket');
+    fs.writeFileSync(toctouDocFile, initialBytes);
+    const initialHash = crypto.createHash('sha256').update(initialBytes).digest('hex');
+
+    const toctouDocket = db.createInstitutionalDocket(adminUser, {
+      docketNumber: `DKT-TOCTOU-${Date.now()}`,
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      sourceOrganization: 'AICTE Western Regional Office',
+      authorizationReference: 'AUTH-TOCTOU-01',
+      documentChecksum: initialHash,
+      documentPath: path.relative(process.cwd(), toctouDocFile).replace(/\\/g, '/'),
+      mimeType: 'application/pdf',
+      sizeBytes: initialBytes.length,
+      pageCount: 5,
+      organizationId: 'org-aicte-western',
+      provenanceStatus: 'PROVENANCE_VERIFIED',
+      lifecycleState: 'PROVENANCE_VERIFIED'
+    });
+
+    const toctouCand = db.createAnnotationRecord({
+      institutionId: 'inst-fw-001',
+      institutionName: 'Bharati Vidyapeeth',
+      claimFieldName: 'land_area',
+      claimText: '10 Acres',
+      claimDocumentId: toctouDocket.id,
+      claimPage: 1,
+      evidenceText: '10 Acres',
+      evidenceDocumentId: evidenceDocket.id,
+      evidencePage: 1,
+      isDemoCandidate: false,
+      organizationId: 'org-aicte-western'
+    });
+
+    db.saveUserAnnotation(toctouCand.id, annotator1, { label: 'MATCH', rationale: 'Claim matches evidence document.', isDraft: false });
+    db.saveUserAnnotation(toctouCand.id, annotator2, { label: 'MATCH', rationale: 'Claim matches evidence document too.', isDraft: false });
+
+    // Mutate the file on disk
+    const mutatedBytes = Buffer.from('%PDF-1.4 Tampered / Substituted Document Content with Forged Parameters');
+    fs.writeFileSync(toctouDocFile, mutatedBytes);
+
+    const exportRes = db.exportGoldStandard({ outPath: testOutPath });
+    const isRejected = exportRes.rejectionReasons.some(r => r.recordId === toctouCand.recordId && r.reasons.some(re => re.includes('mutated since verification')));
+    testAssert(isRejected, 'TOCTOU mutated document candidate strictly rejected by Gate 15');
+
+    if (fs.existsSync(toctouDocFile)) fs.unlinkSync(toctouDocFile);
+  });
+
   // TEST 3: Gate 3 — Document Checksum Recalculation Failure Rejection
   runTest('Gate 3: Rejection when on-disk document SHA-256 does not match registered checksum', () => {
     // Create a docket pointing to a file with tampered hash registered
