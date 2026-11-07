@@ -259,6 +259,39 @@ export async function submitReviewAction(
   return json.data;
 }
 
+export interface BharatCodeExplanationData {
+  summary: string;
+  classification_context: 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE';
+  reasoning: string;
+  evidence_references: Array<{
+    documentName: string;
+    pageNumber: number;
+    citedText?: string;
+  }>;
+  uncertainties: string[];
+  requires_human_review: boolean;
+}
+
+export interface BharatCodeExplainResult {
+  success: boolean;
+  status: string;
+  data?: BharatCodeExplanationData;
+  modelUsed?: string;
+  latencyMs?: number;
+  error?: string;
+}
+
+/**
+ * Invokes BharatCode Qwen 3.8 27B model API for evidence-grounded finding explanation.
+ */
+export async function explainFindingWithBharatCode(findingId: string): Promise<BharatCodeExplainResult> {
+  const res = await fetch(`${API_BASE}/findings/${findingId}/explain`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  return res.json();
+}
+
 export async function recordApplicationDecision(
   applicationId: string,
   decisionType: 'Approved' | 'Rejected' | 'Clarification Required',

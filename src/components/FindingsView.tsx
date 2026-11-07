@@ -2,11 +2,17 @@ import React, { useState } from 'react';
 import {
   Search,
   ExternalLink,
-  ArrowRight
+  ArrowRight,
+  Sparkles,
+  RotateCw,
+  AlertCircle,
+  HelpCircle,
+  CheckCircle2
 } from 'lucide-react';
 import { Finding, Application } from '../types/index.ts';
 import { StatusBadge } from '../shared/components/StatusBadge.tsx';
 import { EmptyState } from '../shared/components/EmptyState.tsx';
+import { explainFindingWithBharatCode, BharatCodeExplainResult } from '../services/api.ts';
 
 interface FindingsViewProps {
   findings: Finding[];
@@ -27,6 +33,27 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState('all');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [explanations, setExplanations] = useState<Record<string, BharatCodeExplainResult>>({});
+  const [loadingExplanation, setLoadingExplanation] = useState<Record<string, boolean>>({});
+
+  const handleExplain = async (findingId: string) => {
+    setLoadingExplanation((prev) => ({ ...prev, [findingId]: true }));
+    try {
+      const res = await explainFindingWithBharatCode(findingId);
+      setExplanations((prev) => ({ ...prev, [findingId]: res }));
+    } catch (err: any) {
+      setExplanations((prev) => ({
+        ...prev,
+        [findingId]: {
+          success: false,
+          status: 'error',
+          error: err.message || 'Failed to connect to BharatCode service'
+        }
+      }));
+    } finally {
+      setLoadingExplanation((prev) => ({ ...prev, [findingId]: false }));
+    }
+  };
 
   const domainPills = [
     { id: 'all', label: 'All Domains', count: findings.length },
@@ -285,6 +312,94 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                   </div>
                 )}
 
+                {/* BharatCode Qwen 3.8 27B AI Explanation Card */}
+                {explanations[finding.id] && (
+                  <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg text-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#DCFCE7]">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#16A34A]" />
+                        <span className="font-semibold text-[#166534] text-sm">
+                          AI Evidence Explanation · BharatCode {explanations[finding.id].modelUsed || 'qwen-3.8-27b'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] font-mono text-[10px]">
+                          Advisory Reasoning
+                        </span>
+                      </div>
+                      {explanations[finding.id].latencyMs && (
+                        <span className="text-[#15803D] font-mono text-[11px]">
+                          {explanations[finding.id].latencyMs}ms
+                        </span>
+                      )}
+                    </div>
+
+                    {explanations[finding.id].success && explanations[finding.id].data ? (
+                      <div className="space-y-2 text-[#166534]">
+                        <div className="font-semibold text-[#14532D] text-sm">
+                          {explanations[finding.id].data?.summary}
+                        </div>
+                        <p className="text-xs text-[#166534] leading-relaxed">
+                          {explanations[finding.id].data?.reasoning}
+                        </p>
+
+                        {/* Verified Citations */}
+                        {(explanations[finding.id].data?.evidence_references || []).length > 0 && (
+                          <div className="pt-2 border-t border-[#DCFCE7] space-y-1">
+                            <span className="font-medium text-[#14532D]">Grounded Source Citations:</span>
+                            {explanations[finding.id].data?.evidence_references.map((ref, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-[#15803D] pl-2 border-l-2 border-[#86EFAC]">
+                                <span>{ref.documentName} (p. {ref.pageNumber})</span>
+                                {app && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenDocumentReview(app, finding.evidenceList[0]?.documentId, ref.pageNumber)}
+                                    className="text-[#16A34A] hover:underline font-semibold flex items-center gap-1"
+                                  >
+                                    <span>Verify Page</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Explicit Uncertainties */}
+                        {(explanations[finding.id].data?.uncertainties || []).length > 0 && (
+                          <div className="pt-2 border-t border-[#DCFCE7] text-[11px] text-[#854D0E] bg-[#FEF9C3] p-2.5 rounded border border-[#FEF08A] space-y-0.5">
+                            <span className="font-semibold">Explicit Uncertainties / Discrepancies Noted:</span>
+                            {explanations[finding.id].data?.uncertainties.map((u, i) => (
+                              <div key={i}>• {u}</div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-[#15803D]/80 pt-1 italic">
+                          * Advisory AI explanation. Authoritative Form2Fact classification and human reviewer decisions remain strictly final.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 text-xs text-[#991B1B] bg-[#FEF2F2] p-3 rounded border border-[#FECDD3]">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626] mt-0.5" />
+                        <div>
+                          <div className="font-semibold">
+                            {explanations[finding.id].status === 'unavailable'
+                              ? 'BharatCode API Ready (Key Not Configured)'
+                              : 'AI Explanation Unavailable'}
+                          </div>
+                          <div className="text-[11px] text-[#B91C1C] mt-0.5">
+                            {explanations[finding.id].error || 'Service returned an error.'}
+                          </div>
+                          {explanations[finding.id].status === 'unavailable' && (
+                            <div className="text-[11px] text-[#64748B] mt-1">
+                              Configure <code className="bg-[#F1F5F9] px-1 py-0.5 rounded text-[#0F172A]">BHARATCODE_API_KEY</code> in environment to generate live AI explanations using Qwen 3.8 27B.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
                   <div className="text-[#64748B] font-mono tabular-nums">
                     Updated {new Date(finding.updatedAt).toLocaleString()}
@@ -300,6 +415,24 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    <button
+                      type="button"
+                      disabled={loadingExplanation[finding.id]}
+                      onClick={() => handleExplain(finding.id)}
+                      className="px-3.5 py-2 font-medium text-[#15803D] bg-[#F0FDF4] hover:bg-[#DCFCE7] border border-[#BBF7D0] rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+                    >
+                      {loadingExplanation[finding.id] ? (
+                        <>
+                          <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Consulting BharatCode...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Explain with BharatCode</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => onOpenReviewAction(finding)}

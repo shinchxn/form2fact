@@ -1,0 +1,24 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "model": "bharatcode/qwen-3.8-27b",
+    "providers": {
+        "bharatcode": {
+            "name": "BharatCode",
+            "env": [
+                "BHARATCODE_API_KEY"
+            ],
+            "package": "@opencode/ai/providers/openai-compatible",
+            "settings": {
+                "baseURL": "https://bharatcode.ai/api/model/v1"
+            },
+            "models": {
+                "qwen-3.8-27b": {
+                    "name": "Qwen 3.8 27B"
+                },
+                "deepseek-v4.1-flash": {
+                    "name": "DeepSeek V4.1 Flash"
+                }
+            }
+        }
+    }
+}

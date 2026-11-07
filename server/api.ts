@@ -19,6 +19,7 @@ import { domainRegistry } from './domains/index.ts';
 import { buildAicteLeasePreview } from './domains/aicte/adapter.ts';
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.ts';
+import { BharatCodeService } from './modules/explanation/bharatCodeService.ts';
 import { jobQueue } from './core/jobs/index.ts';
 import { storageProvider } from './core/storage/index.ts';
 import { validate } from './core/validation/validate.ts';
@@ -971,6 +972,107 @@ router.post('/api/v1/findings/:id/review', authenticateToken, requireRole(['Admi
 
   const updatedFinding = db.recordReviewAction(req.params.id, action, newStatus, note.trim(), req.user);
   res.json({ success: true, data: updatedFinding });
+});
+
+/**
+ * BharatCode Model API Integration Endpoint:
+ * Generates an evidence-grounded AI explanation for an existing finding using BharatCode Qwen 3.8 27B.
+ * Authoritative finding and classifier label remain strictly preserved.
+ */
+router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const finding = db.getFindingById(req.params.id);
+  if (!finding) {
+    return res.status(404).json({ success: false, error: 'Finding not found' });
+  }
+
+  const isAdmin = req.user?.role === 'Administrator';
+  const userOrgId = req.user?.organizationId;
+  const app = db.getApplicationById(finding.applicationId, userOrgId, isAdmin);
+
+  if (!app) {
+    return res.status(403).json({ success: false, error: 'Access denied: Finding belongs to an application in another organization.' });
+  }
+
+  // Derive 5-class label from finding characteristics
+  let label: 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE' = 'MISMATCH';
+  if (finding.severity === 'Information Missing') {
+    label = 'MISSING';
+  } else if (finding.status === 'Unable to Determine' || finding.explanation.toLowerCase().includes('uncertain') || finding.explanation.toLowerCase().includes('scanned')) {
+    label = 'UNCERTAIN';
+  } else if (finding.status === 'Dismissed') {
+    label = 'NOT_COMPARABLE';
+  } else if (finding.status === 'Corrected' && (!finding.evidenceValue || finding.declaredValue === finding.evidenceValue)) {
+    label = 'MATCH';
+  }
+
+  const primaryEvidence = finding.evidenceList?.[0];
+
+  const result = await BharatCodeService.generateExplanation({
+    claim: {
+      fieldName: finding.ruleKey || 'statutory_claim',
+      fieldLabel: finding.title || 'Institutional Declaration',
+      rawValue: finding.declaredValue || 'N/A',
+      sourceText: finding.explanation
+    },
+    evidence: {
+      fieldName: finding.ruleKey || 'supporting_evidence',
+      fieldLabel: primaryEvidence?.evidenceRole || 'Supporting Evidence',
+      rawValue: finding.evidenceValue || 'Missing',
+      documentName: primaryEvidence?.documentName,
+      documentId: primaryEvidence?.documentId,
+      pageNumber: primaryEvidence?.pageNumber,
+      sourceText: primaryEvidence?.evidenceText
+    },
+    classifierResult: {
+      label,
+      confidence: 0.95,
+      explanation: finding.explanation
+    },
+    ruleContext: {
+      ruleKey: finding.ruleKey,
+      ruleTitle: finding.title,
+      requirement: finding.explanation
+    }
+  });
+
+  res.json({
+    success: result.success,
+    status: result.status,
+    data: result.data,
+    modelUsed: result.modelUsed,
+    latencyMs: result.latencyMs,
+    error: result.error
+  });
+});
+
+/**
+ * Arbitrary Pairwise BharatCode Explanation Endpoint
+ */
+router.post('/api/v1/ai/bharatcode/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { claim, evidence, classifierResult, ruleContext } = req.body;
+
+  if (!claim || !claim.fieldName || !claim.rawValue || !classifierResult || !classifierResult.label) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: claim (fieldName, rawValue) and classifierResult (label, confidence, explanation) are mandatory.'
+    });
+  }
+
+  const result = await BharatCodeService.generateExplanation({
+    claim,
+    evidence,
+    classifierResult,
+    ruleContext
+  });
+
+  res.json({
+    success: result.success,
+    status: result.status,
+    data: result.data,
+    modelUsed: result.modelUsed,
+    latencyMs: result.latencyMs,
+    error: result.error
+  });
 });
 
 // =========================================================================
