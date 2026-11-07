@@ -60,7 +60,20 @@ router.post('/api/v1/auth/login', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'Email and password are required.' });
   }
 
-  const user = db.getUserByEmail(email.toLowerCase().trim());
+  const cleanEmail = email.toLowerCase().trim();
+
+  // BLOCKER 1: In production mode, demo persona credentials are strictly prohibited
+  const DEMO_EMAILS = [
+    'aruna.rao@scrutiny.edu.in',
+    'vk.sharma@scrutiny.edu.in',
+    'meenakshi.s@audit.gov.in',
+    'rajesh.verma@scrutiny.edu.in'
+  ];
+  if (process.env.NODE_ENV === 'production' && DEMO_EMAILS.includes(cleanEmail)) {
+    return res.status(401).json({ success: false, error: 'Demonstration persona credentials are strictly prohibited in production mode.' });
+  }
+
+  const user = db.getUserByEmail(cleanEmail);
   if (!user) {
     return res.status(401).json({ success: false, error: 'Invalid institutional credentials.' });
   }
@@ -86,6 +99,54 @@ router.post('/api/v1/auth/login', (req: Request, res: Response) => {
     success: true,
     token,
     user: safeUser
+  });
+});
+
+/**
+ * One-time secure initial administrator provisioning
+ * Enabled only when database contains exactly 0 users.
+ */
+router.post('/api/v1/auth/bootstrap-admin', (req: Request, res: Response) => {
+  const count = db.getUsersCount();
+  if (count > 0) {
+    return res.status(403).json({ success: false, error: 'Bootstrap disabled: System administrator already provisioned.' });
+  }
+
+  const { email, password, displayName, organizationId } = req.body;
+  if (!email || !password || !displayName) {
+    return res.status(400).json({ success: false, error: 'email, password, and displayName are required.' });
+  }
+
+  if (typeof password !== 'string' || password.length < 12) {
+    return res.status(400).json({ success: false, error: 'Administrator password must be at least 12 characters.' });
+  }
+
+  const trivialPasswords = ['Admin123!', 'Password123!', 'Reviewer123!', 'Administrator123!'];
+  if (trivialPasswords.includes(password)) {
+    return res.status(400).json({ success: false, error: 'Administrator password cannot use known default/trivial credentials.' });
+  }
+
+  const adminId = `usr-admin-${crypto.randomUUID().slice(0, 8)}`;
+  const passwordHash = bcrypt.hashSync(password, 12);
+
+  const createdAdmin = db.createUser({
+    id: adminId,
+    displayName: displayName.trim(),
+    email: email.toLowerCase().trim(),
+    passwordHash,
+    role: 'Administrator',
+    department: 'System Administration Directorate',
+    organizationId: organizationId || 'org-aicte-western',
+    createdAt: new Date().toISOString()
+  });
+
+  const token = generateToken(createdAdmin);
+
+  res.status(201).json({
+    success: true,
+    message: 'Initial system administrator bootstrapped successfully.',
+    user: createdAdmin,
+    token
   });
 });
 

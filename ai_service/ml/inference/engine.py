@@ -155,6 +155,12 @@ class MLPairwiseInferenceEngine:
         if not self.is_ready():
             raise RuntimeError("ML pairwise model weights are missing or corrupt. Inference cannot proceed.")
 
+        if hasattr(self.clf, "n_features_in_") and X.shape[1] != self.clf.n_features_in_:
+            raise ValueError(
+                f"Feature dimension mismatch: feature extractor generated {X.shape[1]} features, "
+                f"but classifier head expects {self.clf.n_features_in_} features."
+            )
+
         if self.is_calibrated and self.temperature != 1.0 and hasattr(self.clf, "decision_function"):
             decision = self.clf.decision_function(X)
             scaled = decision / self.temperature

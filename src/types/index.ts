@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   department: string;
   organizationId?: string;
+  createdAt?: string;
 }
 
 export interface DeclaredDetails {

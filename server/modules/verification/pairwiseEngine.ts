@@ -8,6 +8,7 @@ export interface FieldCandidate {
   fieldId?: string;
   documentId?: string;
   documentName?: string;
+  sourceDocumentType?: string;
   fieldName: string;
   fieldLabel: string;
   rawValue: string;
@@ -101,16 +102,16 @@ export class PairwiseFieldClassifier {
 
     // Build evidence item
     const evidenceItems: FindingEvidence[] = [];
-    if (evidence.documentName && evidence.pageNumber) {
+    if ((evidence.documentName || evidence.documentId || evidence.sourceDocumentType) && evidence.pageNumber) {
       evidenceItems.push({
         id: `ev-${Date.now()}`,
         findingId: '',
         documentId: evidence.documentId || 'unknown-doc',
-        documentName: evidence.documentName,
+        documentName: evidence.documentName || evidence.sourceDocumentType || 'Supporting Document',
         pageNumber: evidence.pageNumber,
         fieldId: evidence.fieldId,
         evidenceText: evidence.sourceText || `Extracted value: ${evidence.rawValue}`,
-        evidenceRole: 'Conflicting Evidence'
+        evidenceRole: 'Primary Supporting Document'
       });
     }
 

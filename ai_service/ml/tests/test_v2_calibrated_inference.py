@@ -380,3 +380,33 @@ def test_fastapi_http_503_when_unready(monkeypatch):
     finally:
         ml_engine.clf = original_clf
 
+
+def test_temperature_scaling_mathematical_precision(engine):
+    """BLOCKER 5: Verify exact mathematical temperature scaling equations and softmax properties."""
+    X = np.ones((1, 1544), dtype=np.float32) * 0.5
+    raw_margins = engine.clf.decision_function(X)
+    assert raw_margins.shape == (1, 5)
+    assert not np.isnan(raw_margins).any()
+    assert not np.isinf(raw_margins).any()
+
+    # Uncalibrated softmax (T = 1.0)
+    exp_uncal = np.exp(raw_margins - np.max(raw_margins, axis=1, keepdims=True))
+    probs_uncal = exp_uncal / np.sum(exp_uncal, axis=1, keepdims=True)
+
+    # Calibrated softmax (T = 1.8182)
+    T = engine.temperature
+    assert T == pytest.approx(1.8182, abs=1e-4)
+    scaled_margins = raw_margins / T
+    exp_cal = np.exp(scaled_margins - np.max(scaled_margins, axis=1, keepdims=True))
+    probs_cal = exp_cal / np.sum(exp_cal, axis=1, keepdims=True)
+
+    # Verify predict_probabilities matches calibrated output exactly
+    actual_probs = engine.predict_probabilities(X)
+    np.testing.assert_allclose(actual_probs, probs_cal, rtol=1e-6, atol=1e-6)
+
+    # When T > 1.0, maximum logit probability is regularized (calibrated max < uncalibrated max)
+    assert np.max(probs_cal) <= np.max(probs_uncal)
+    assert np.isclose(np.sum(probs_cal), 1.0, atol=1e-6)
+    assert (probs_cal >= 0.0).all() and (probs_cal <= 1.0).all()
+
+
