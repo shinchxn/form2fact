@@ -5,7 +5,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from './db.ts';
-import { DocumentRecord, DocumentType, ExtractedField, ScrutinyReportData, User } from '../src/types/index.ts';
+import { DocumentRecord, DocumentType, ExtractedField, ScrutinyReportData, User, FiveClassLabel, AnnotationRecord } from '../src/types/index.ts';
 import { extractFieldsFromPages, runDeepScrutinyAnalysis } from './extraction.ts';
 import { evaluateSingleRuleSandbox } from './rulesEngine.ts';
 import {
@@ -1175,6 +1175,130 @@ router.get('/api/v1/jobs/:id', authenticateToken, (req: Request, res: Response) 
     return res.status(404).json({ success: false, error: 'Job not found or expired.' });
   }
   res.json({ success: true, data: job });
+});
+
+// =========================================================================
+// 13. V3 HUMAN ANNOTATION WORKBENCH
+// =========================================================================
+
+/**
+ * Lists candidate annotation tasks with blind-review masking and tenant scoping.
+ */
+router.get('/api/v1/annotations/records', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const institutionId = req.query.institutionId as string | undefined;
+  const records = db.getAnnotationRecords({
+    status: status === 'all' ? undefined : status,
+    institutionId: institutionId === 'all' ? undefined : institutionId,
+    organizationId: req.user?.role === 'Administrator' ? undefined : req.user?.organizationId,
+    userId: req.user?.id,
+    role: req.user?.role
+  });
+  res.json({ success: true, data: records });
+});
+
+/**
+ * Retrieves a single annotation task by ID with blind review masking.
+ */
+router.get('/api/v1/annotations/records/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const record = db.getAnnotationRecordById(req.params.id, req.user?.id, req.user?.role);
+  if (!record) {
+    return res.status(404).json({ success: false, error: 'Annotation record not found.' });
+  }
+  // Tenant check
+  if (req.user?.role !== 'Administrator' && record.organizationId && req.user?.organizationId && record.organizationId !== req.user.organizationId) {
+    return res.status(403).json({ success: false, error: 'Cross-tenant access prohibited for this annotation task.' });
+  }
+  res.json({ success: true, data: record });
+});
+
+/**
+ * Creates a new candidate annotation task from institutional claim/evidence pair.
+ * Allowed: Administrator, Reviewer, Data Collector.
+ */
+router.post('/api/v1/annotations/records', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Data Collector']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const record = db.createAnnotationRecord({
+      ...req.body,
+      organizationId: req.user?.organizationId || 'org-aicte-western'
+    });
+    res.status(201).json({ success: true, data: record });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to create annotation record.' });
+  }
+});
+
+/**
+ * Saves a user's draft or submits an independent blind annotation.
+ * Allowed: Administrator, Reviewer, Annotator, Adjudicator.
+ */
+router.post('/api/v1/annotations/records/:id/annotate', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Annotator', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { label, rationale, isDraft } = req.body;
+    if (!label) {
+      return res.status(400).json({ success: false, error: 'Annotation label is required.' });
+    }
+    const result = db.saveUserAnnotation(
+      req.params.id,
+      {
+        id: req.user!.id,
+        displayName: req.user!.displayName,
+        role: req.user!.role,
+        organizationId: req.user!.organizationId
+      },
+      { label, rationale: rationale || '', isDraft: Boolean(isDraft) }
+    );
+    res.json({ success: true, data: result.record, annotation: result.annotation });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to save annotation.' });
+  }
+});
+
+/**
+ * Resolves a disputed annotation record (third-reviewer adjudication).
+ * Allowed: Administrator, Adjudicator.
+ */
+router.post('/api/v1/annotations/records/:id/adjudicate', authenticateToken, requireRole(['Administrator', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { label, rationale } = req.body;
+    if (!label || !rationale) {
+      return res.status(400).json({ success: false, error: 'Final label and adjudication rationale are required.' });
+    }
+    const record = db.adjudicateRecord(
+      req.params.id,
+      {
+        id: req.user!.id,
+        displayName: req.user!.displayName,
+        role: req.user!.role
+      },
+      { label, rationale }
+    );
+    res.json({ success: true, data: record });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to adjudicate record.' });
+  }
+});
+
+/**
+ * Computes real-time annotation quality metrics, label distributions, raw agreement and Cohen's Kappa.
+ */
+router.get('/api/v1/annotations/metrics', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const orgId = req.user?.role === 'Administrator' ? undefined : req.user?.organizationId;
+  const metrics = db.getAnnotationMetrics(orgId);
+  res.json({ success: true, data: metrics });
+});
+
+/**
+ * Exports agreed and adjudicated records to canonical V3 gold-standard JSONL and manifest.
+ * Allowed: Administrator, Reviewer, Adjudicator.
+ */
+router.post('/api/v1/annotations/export', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = db.exportGoldStandard();
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to export gold standard dataset.' });
+  }
 });
 
 // Centralized error handler

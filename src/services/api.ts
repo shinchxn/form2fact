@@ -1,4 +1,18 @@
-import { Application, DocumentRecord, ExtractedField, Finding, ReviewAction, AuditEvent, Rule, User, ScrutinyReportData } from '../types/index.ts';
+import {
+  Application,
+  DocumentRecord,
+  ExtractedField,
+  Finding,
+  ReviewAction,
+  AuditEvent,
+  Rule,
+  User,
+  ScrutinyReportData,
+  AnnotationRecord,
+  AnnotationMetrics,
+  FiveClassLabel,
+  UserAnnotation
+} from '../types/index.ts';
 
 const API_BASE = '/api/v1';
 
@@ -433,5 +447,97 @@ export async function runPairwiseComparison(data: PairwiseComparisonRequest): Pr
   });
   const json = await res.json();
   if (!json.success) throw new Error(json.error || 'Pairwise comparison request failed');
+  return json.data;
+}
+
+// =========================================================================
+// V3 HUMAN ANNOTATION WORKBENCH API
+// =========================================================================
+
+export async function fetchAnnotationRecords(params?: {
+  status?: string;
+  institutionId?: string;
+}): Promise<AnnotationRecord[]> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.institutionId) query.set('institutionId', params.institutionId);
+
+  const res = await fetch(`${API_BASE}/annotations/records?${query.toString()}`, {
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to fetch annotation records');
+  return json.data || [];
+}
+
+export async function fetchAnnotationRecordById(id: string): Promise<AnnotationRecord> {
+  const res = await fetch(`${API_BASE}/annotations/records/${id}`, {
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to fetch annotation record');
+  return json.data;
+}
+
+export async function createAnnotationRecord(data: Partial<AnnotationRecord>): Promise<AnnotationRecord> {
+  const res = await fetch(`${API_BASE}/annotations/records`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to create annotation record');
+  return json.data;
+}
+
+export async function saveUserAnnotation(
+  recordId: string,
+  data: { label: FiveClassLabel; rationale: string; isDraft?: boolean }
+): Promise<{ record: AnnotationRecord; annotation: UserAnnotation }> {
+  const res = await fetch(`${API_BASE}/annotations/records/${recordId}/annotate`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to save annotation');
+  return { record: json.data, annotation: json.annotation };
+}
+
+export async function adjudicateAnnotationRecord(
+  recordId: string,
+  data: { label: FiveClassLabel; rationale: string }
+): Promise<AnnotationRecord> {
+  const res = await fetch(`${API_BASE}/annotations/records/${recordId}/adjudicate`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to adjudicate record');
+  return json.data;
+}
+
+export async function fetchAnnotationMetrics(): Promise<AnnotationMetrics> {
+  const res = await fetch(`${API_BASE}/annotations/metrics`, {
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to fetch annotation metrics');
+  return json.data;
+}
+
+export async function exportGoldStandard(): Promise<{
+  count: number;
+  outPath: string;
+  sha256: string;
+  manifestPath: string;
+}> {
+  const res = await fetch(`${API_BASE}/annotations/export`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Failed to export gold-standard dataset');
   return json.data;
 }

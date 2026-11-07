@@ -5,6 +5,7 @@ import {
   FileSearch,
   AlertTriangle,
   Scale,
+  CheckSquare,
   FileSpreadsheet,
   History,
   Settings,
@@ -19,6 +20,7 @@ export type ViewType =
   | 'applications'
   | 'document-review'
   | 'verification'
+  | 'annotations'
   | 'findings'
   | 'rules'
   | 'aicte-preview'
@@ -46,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'applications' as ViewType, label: 'Applications', icon: FolderOpen },
     { id: 'document-review' as ViewType, label: 'Evidence Viewer', icon: FileSearch },
     { id: 'verification' as ViewType, label: 'Pairwise Verification', icon: Scale },
+    { id: 'annotations' as ViewType, label: 'Annotation Workbench', icon: CheckSquare },
     {
       id: 'findings' as ViewType,
       label: 'Findings',

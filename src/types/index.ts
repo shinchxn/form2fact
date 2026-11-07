@@ -2,7 +2,13 @@ export type ApplicationStatus = 'Uploaded' | 'Extracting' | 'Validating' | 'Read
 export type ReviewStatus = 'Pending Review' | 'Under Review' | 'Review Completed' | 'Discrepancies Confirmed';
 export type FindingSeverity = 'Attention Required' | 'Material Discrepancy' | 'Information Missing' | 'Administrative Advisory';
 export type FindingStatus = 'Open' | 'Under Review' | 'Confirmed' | 'Dismissed' | 'Corrected' | 'Unable to Determine';
-export type UserRole = 'Administrator' | 'Reviewer' | 'Read-only Viewer';
+export type UserRole =
+  | 'Administrator'
+  | 'Reviewer'
+  | 'Read-only Viewer'
+  | 'Data Collector'
+  | 'Annotator'
+  | 'Adjudicator';
 
 export interface User {
   id: string;
@@ -194,11 +200,81 @@ export interface AuditEvent {
   actorId: string;
   actorName: string;
   action: string;
-  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User';
+  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User' | 'AnnotationRecord' | 'UserAnnotation';
   entityReference: string;
   beforeValue?: string;
   afterValue?: string;
   note?: string;
+}
+
+export type FiveClassLabel = 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE';
+
+export type AnnotationRecordStatus = 'pending' | 'in_review' | 'agreed' | 'disputed' | 'adjudicated';
+
+export interface UserAnnotation {
+  id: string;
+  recordId: string;
+  annotatorId: string;
+  annotatorName: string;
+  annotatorRole: string;
+  label: FiveClassLabel;
+  rationale: string;
+  isDraft: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationRecord {
+  id: string;
+  recordId: string;
+  institutionId: string;
+  institutionName: string;
+  applicationId?: string;
+  claimFieldName: string;
+  claimText: string;
+  claimDocumentId?: string;
+  claimDocumentName?: string;
+  claimPage?: number;
+  evidenceText: string;
+  evidenceDocumentId?: string;
+  evidenceDocumentName?: string;
+  evidencePage?: number;
+  evidenceLocation?: string;
+  normalizedClaimValue?: string;
+  normalizedEvidenceValue?: string;
+  fieldCategory?: string;
+  sourceProvenance: string;
+  licence?: string;
+  originalSourceLabel?: string;
+  status: AnnotationRecordStatus;
+  finalLabel?: FiveClassLabel;
+  adjudicatorId?: string;
+  adjudicatorName?: string;
+  adjudicationRationale?: string;
+  adjudicatedAt?: string;
+  organizationId: string;
+  userAnnotations?: UserAnnotation[];
+  myAnnotation?: UserAnnotation;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationMetrics {
+  totalRecords: number;
+  completedRecords: number;
+  pendingRecords: number;
+  inReviewRecords: number;
+  agreedRecords: number;
+  disputedRecords: number;
+  adjudicatedRecords: number;
+  labelDistribution: Record<FiveClassLabel, number>;
+  rawAgreementRate: number;
+  cohensKappa: number;
+  cohensKappaInterpretation: string;
+  adjudicationRate: number;
+  missingEvidenceRate: number;
+  invalidRecordRate: number;
+  institutionDistribution: Record<string, number>;
 }
 
 export interface ValidationSummary {
