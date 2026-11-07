@@ -1,5 +1,5 @@
-
 import io
+
 import pymupdf
 import pytesseract
 
@@ -13,16 +13,27 @@ MAX_PAGES = 100
 
 def process_pdf(data: bytes):
     if len(data) > MAX_PDF_SIZE:
-        raise HTTPException(status_code=413, detail="PDF exceeds 15 MB limit")
+        raise HTTPException(
+            status_code=413,
+            detail="PDF exceeds 15 MB limit"
+        )
 
     if not data.startswith(b"%PDF-"):
-        raise HTTPException(status_code=400, detail="Invalid PDF file")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid PDF file"
+        )
+
+    pdf = None
 
     try:
         pdf = pymupdf.open(stream=data, filetype="pdf")
 
         if pdf.page_count > MAX_PAGES:
-            raise HTTPException(status_code=400, detail="PDF exceeds 100 pages")
+            raise HTTPException(
+                status_code=400,
+                detail="PDF exceeds 100 pages"
+            )
 
         pages = []
 
@@ -30,41 +41,63 @@ def process_pdf(data: bytes):
             text = page.get_text("text").strip()
             method = "text_layer"
             ocr_confidence = None
+            word_boxes = []
 
-            # OCR only when the existing text layer is poor
             if len(text) < 40:
                 pix = page.get_pixmap(
                     matrix=pymupdf.Matrix(2, 2),
                     alpha=False
                 )
+
                 image = Image.open(
                     io.BytesIO(pix.tobytes("png"))
                 )
+                image_width, image_height = image.size
 
-                data_result = pytesseract.image_to_data(
-                    image,
-                    output_type=pytesseract.Output.DICT,
-                    timeout=20
-                )
+                try:
+                    data_result = pytesseract.image_to_data(
+                        image,
+                        output_type=pytesseract.Output.DICT,
+                        timeout=20
+                    )
+                finally:
+                    image.close()
 
                 words = []
                 scores = []
 
-                for word, confidence in zip(
+                for word, confidence, left, top, width, height in zip(
                     data_result["text"],
-                    data_result["conf"]
+                    data_result["conf"],
+                    data_result["left"],
+                    data_result["top"],
+                    data_result["width"],
+                    data_result["height"]
                 ):
                     word = word.strip()
 
-                    if word:
-                        words.append(word)
+                    if not word:
+                        continue
 
                     try:
                         score = float(confidence)
-                        if score >= 0:
-                            scores.append(score)
                     except (ValueError, TypeError):
-                        pass
+                        continue
+
+                    if score < 0:
+                        continue
+
+                    words.append(word)
+                    scores.append(score)
+
+                    word_boxes.append({
+                        "text": word,
+                        "confidence": round(score, 2),
+                        "x": round(left / image_width, 6),
+                        "y": round(top / image_height, 6),
+                        "width": round(width / image_width, 6),
+                        "height": round(height / image_height, 6)
+                    })
 
                 text = " ".join(words)
                 method = "ocr"
@@ -80,10 +113,9 @@ def process_pdf(data: bytes):
                 "extractionMethod": method,
                 "ocrConfidence": ocr_confidence,
                 "characterCount": len(text),
-                "status": "extracted" if text else "unreadable"
+                "status": "extracted" if text else "unreadable",
+                "wordBoxes": word_boxes
             })
-
-        pdf.close()
 
         return {
             "pageCount": len(pages),
@@ -92,8 +124,13 @@ def process_pdf(data: bytes):
 
     except HTTPException:
         raise
+
     except Exception as exc:
         raise HTTPException(
             status_code=422,
             detail=f"PDF processing failed: {str(exc)}"
         )
+
+    finally:
+        if pdf is not None:
+            pdf.close()

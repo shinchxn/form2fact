@@ -52,7 +52,7 @@ export function extractFieldsFromPages(
           const snippet = text.slice(Math.max(0, matchIdx - 30), Math.min(text.length, matchIdx + match[0].length + 40)).trim();
 
           fields.push({
-            id: `fld-${documentId}-lease-expiry`,
+            id: `fld-${documentId}-lease-expiry-${pageNum}`,
             documentId,
             applicationId,
             fieldName: 'leaseExpiryDate',
@@ -61,7 +61,7 @@ export function extractFieldsFromPages(
             normalizedValue: normVal,
             pageNumber: pageNum,
             sourceText: snippet,
-            confidence: 0.96,
+            confidence: null,
             extractionMethod: 'Deterministic Text Regex'
           });
           break;
@@ -71,23 +71,27 @@ export function extractFieldsFromPages(
       const areaMatch = text.match(/(?:area\s+admeasuring|total\s+land\s+area|campus\s+extent|measuring)[:\s]+([0-9]+(?:\.[0-9]+)?)\s*(Acres?|Hectares?|Sq\.?\s*Meters?)/i);
       if (areaMatch) {
         const rawVal = `${areaMatch[1]} ${areaMatch[2]}`;
-        const acresVal = areaMatch[2].toLowerCase().startsWith('acre') 
-          ? areaMatch[1] 
-          : (parseFloat(areaMatch[1]) * 2.471).toFixed(2);
+        const amount = parseFloat(areaMatch[1]);
+        const unit = areaMatch[2].toLowerCase();
+        const acresVal = unit.startsWith('acre')
+          ? amount
+          : unit.startsWith('hectare')
+            ? amount * 2.47105
+            : amount / 4046.8564224;
         const matchIdx = areaMatch.index || 0;
         const snippet = text.slice(Math.max(0, matchIdx - 20), Math.min(text.length, matchIdx + areaMatch[0].length + 30)).trim();
 
         fields.push({
-          id: `fld-${documentId}-land-area`,
+          id: `fld-${documentId}-land-area-${pageNum}`,
           documentId,
           applicationId,
           fieldName: 'landAreaAcres',
           fieldLabel: 'Schedule Land Area',
           rawValue: rawVal,
-          normalizedValue: acresVal,
+          normalizedValue: acresVal.toFixed(4),
           pageNumber: pageNum,
           sourceText: snippet,
-          confidence: 0.94,
+          confidence: null,
           extractionMethod: 'Deterministic Text Regex'
         });
       }
@@ -98,7 +102,7 @@ export function extractFieldsFromPages(
         || text.match(/Certificate\s+of\s+Registration[\s\S]*?Name\s*[:\-]\s*([A-Za-z0-9\s.,&'\-]+)/i);
       if (trustMatch) {
         fields.push({
-          id: `fld-${documentId}-trust-name`,
+          id: `fld-${documentId}-trust-name-${pageNum}`,
           documentId,
           applicationId,
           fieldName: 'trustName',
@@ -107,7 +111,7 @@ export function extractFieldsFromPages(
           normalizedValue: trustMatch[1].trim(),
           pageNumber: pageNum,
           sourceText: trustMatch[0].slice(0, 150).trim(),
-          confidence: 0.95,
+          confidence: null,
           extractionMethod: 'Deterministic Text Regex'
         });
       }
@@ -117,7 +121,7 @@ export function extractFieldsFromPages(
       const fNoMatch = text.match(/(?:F\.?\s*No\.?\s*([A-Za-z0-9\/\-_]+(?:\/[A-Za-z0-9\-_]+)+))/i);
       if (fNoMatch) {
         fields.push({
-          id: `fld-${documentId}-prior-ref`,
+          id: `fld-${documentId}-prior-ref-${pageNum}`,
           documentId,
           applicationId,
           fieldName: 'priorApprovalOrderRef',
@@ -126,7 +130,7 @@ export function extractFieldsFromPages(
           normalizedValue: fNoMatch[1].trim(),
           pageNumber: pageNum,
           sourceText: fNoMatch[0].trim(),
-          confidence: 0.99,
+          confidence: null,
           extractionMethod: 'Deterministic Text Regex'
         });
       }
@@ -224,7 +228,7 @@ Rules:
           'Verify cited document pages in the 3-Pane Evidence Viewer before recording final finding status.',
           'Record a mandatory written justification when confirming or dismissing any discrepancy.'
         ],
-        uncertaintyNotice: 'AI-Assisted Synthesis (gemini-4-argon · ThinkingLevel.HIGH) — Advisory only. Deterministic rules and human reviewer sign-off govern all scrutiny outcomes.'
+        uncertaintyNotice: 'AI-Assisted Synthesis (gemini-4-argon Â· ThinkingLevel.HIGH) â€” Advisory only. Deterministic rules and human reviewer sign-off govern all scrutiny outcomes.'
       };
     } catch (err: any) {
       console.warn('Gemini 4 Argon high-thinking call fallback triggered:', err.message);
@@ -241,7 +245,7 @@ Rules:
 
   for (const f of findings) {
     observations.push(
-      `[${f.reference} · ${f.ruleKey} ${f.ruleVersion}] ${f.title}: Declared "${f.declaredValue || 'N/A'}" vs Evidence "${f.evidenceValue || 'Missing'}" (${f.status}).`
+      `[${f.reference} Â· ${f.ruleKey} ${f.ruleVersion}] ${f.title}: Declared "${f.declaredValue || 'N/A'}" vs Evidence "${f.evidenceValue || 'Missing'}" (${f.status}).`
     );
   }
 
@@ -262,7 +266,7 @@ Rules:
 
   return {
     generatedAt: new Date().toISOString(),
-    modelUsed: 'Deterministic Synthesis Engine (Local Fallback — gemini-4-argon configured)',
+    modelUsed: 'Deterministic Synthesis Engine (Local Fallback â€” gemini-4-argon configured)',
     thinkingMode: 'ThinkingLevel.HIGH (Ready)',
     isAiGenerated: false,
     summary: observations.join(' '),

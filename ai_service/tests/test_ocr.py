@@ -26,6 +26,7 @@ def create_scanned_pdf():
     image = Image.new("RGB", (600, 200), "white")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
+    image.close()
 
     pdf = pymupdf.open()
     page = pdf.new_page()
@@ -42,29 +43,55 @@ class TestOCR(unittest.TestCase):
         result = ocr.process_pdf(create_text_pdf())
 
         self.assertEqual(result["pageCount"], 1)
-        self.assertEqual(
-            result["pages"][0]["extractionMethod"],
-            "text_layer"
-        )
-        self.assertIn(
-            "Form2Fact",
-            result["pages"][0]["text"]
-        )
+        page = result["pages"][0]
+        self.assertEqual(page["extractionMethod"], "text_layer")
+        self.assertIn("Form2Fact", page["text"])
+        self.assertEqual(page["wordBoxes"], [])
 
     @patch("app.ocr.pytesseract.image_to_data")
     def test_scanned_pdf_ocr(self, mock_ocr):
         mock_ocr.return_value = {
             "text": ["FORM2FACT", "TEST"],
-            "conf": ["90", "80"]
+            "conf": ["90", "80"],
+            "left": [60, 180],
+            "top": [30, 30],
+            "width": [100, 80],
+            "height": [25, 25]
         }
 
         result = ocr.process_pdf(create_scanned_pdf())
-
         page = result["pages"][0]
 
         self.assertEqual(page["extractionMethod"], "ocr")
         self.assertIn("FORM2FACT", page["text"])
         self.assertEqual(page["ocrConfidence"], 85.0)
+        self.assertEqual(len(page["wordBoxes"]), 2)
+
+        for box in page["wordBoxes"]:
+            self.assertGreaterEqual(box["x"], 0)
+            self.assertGreaterEqual(box["y"], 0)
+            self.assertGreaterEqual(box["width"], 0)
+            self.assertGreaterEqual(box["height"], 0)
+            self.assertLessEqual(box["x"] + box["width"], 1)
+            self.assertLessEqual(box["y"] + box["height"], 1)
+
+    @patch("app.ocr.pytesseract.image_to_data")
+    def test_invalid_confidence_is_excluded(self, mock_ocr):
+        mock_ocr.return_value = {
+            "text": ["VALID", "UNKNOWN", "ALSO_VALID"],
+            "conf": ["90", "-1", "70"],
+            "left": [10, 20, 30],
+            "top": [10, 20, 30],
+            "width": [20, 20, 20],
+            "height": [10, 10, 10]
+        }
+
+        result = ocr.process_pdf(create_scanned_pdf())
+        page = result["pages"][0]
+
+        self.assertEqual(page["ocrConfidence"], 80.0)
+        self.assertEqual(page["text"], "VALID ALSO_VALID")
+        self.assertEqual(len(page["wordBoxes"]), 2)
 
     def test_invalid_pdf(self):
         with self.assertRaises(ocr.HTTPException) as error:
