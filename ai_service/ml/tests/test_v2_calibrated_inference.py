@@ -410,3 +410,124 @@ def test_temperature_scaling_mathematical_precision(engine):
     assert (probs_cal >= 0.0).all() and (probs_cal <= 1.0).all()
 
 
+def test_production_champion_estimator_forensic_properties():
+    """Verify production champion artifact estimator class, inference methods, and calibration score representation."""
+    from ai_service.ml.inference.engine import V2_CHAMPION_WEIGHTS, V2_CALIBRATED_WEIGHTS
+    import hashlib
+    import pickle
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    # 1. Champion artifact checks
+    assert V2_CHAMPION_WEIGHTS.exists(), "Champion weights must exist"
+    champ_bytes = V2_CHAMPION_WEIGHTS.read_bytes()
+    champ_sha = hashlib.sha256(champ_bytes).hexdigest()
+    assert champ_sha == "efa27bee02d3d7b53a96366365f48a3f5924d7bd0095acdde965093bcf8f778e"
+    
+    champ_clf = pickle.loads(champ_bytes)
+    assert isinstance(champ_clf, HistGradientBoostingClassifier)
+    assert champ_clf.n_features_in_ == 1544
+    assert list(champ_clf.classes_) == [0, 1, 2, 3, 4]
+    assert hasattr(champ_clf, "decision_function")
+    assert hasattr(champ_clf, "predict_proba")
+
+    # 2. Calibrated wrapper artifact checks
+    assert V2_CALIBRATED_WEIGHTS.exists(), "Calibrated weights must exist"
+    calib_bytes = V2_CALIBRATED_WEIGHTS.read_bytes()
+    calib_sha = hashlib.sha256(calib_bytes).hexdigest()
+    assert calib_sha == "9560d165b8c46078f1d6fcbaf6d09dc1fe5069078272129f6c808b27e786bdba"
+
+    calib_dict = pickle.loads(calib_bytes)
+    assert isinstance(calib_dict, dict)
+    assert "base_model" in calib_dict
+    assert isinstance(calib_dict["base_model"], HistGradientBoostingClassifier)
+    assert calib_dict["calibration_method"] == "temperature_scaling"
+    assert calib_dict["optimal_temperature"] == pytest.approx(1.8182, abs=1e-4)
+
+    # 3. Equivalence of decision_function vs probability-to-log-score fallback
+    X_test = np.ones((2, 1544), dtype=np.float32) * 0.2
+    raw_dec = champ_clf.decision_function(X_test)
+    raw_proba = champ_clf.predict_proba(X_test)
+    log_scores = np.log(np.clip(raw_proba, 1e-12, 1.0))
+
+    T = 1.8182
+    probs_from_dec = np.exp((raw_dec / T) - np.max(raw_dec / T, axis=1, keepdims=True))
+    probs_from_dec /= np.sum(probs_from_dec, axis=1, keepdims=True)
+
+    probs_from_log = np.exp((log_scores / T) - np.max(log_scores / T, axis=1, keepdims=True))
+    probs_from_log /= np.sum(probs_from_log, axis=1, keepdims=True)
+
+    np.testing.assert_allclose(probs_from_dec, probs_from_log, rtol=1e-4, atol=1e-4)
+    assert probs_from_dec.shape == (2, 5)
+    assert np.all((probs_from_dec >= 0.0) & (probs_from_dec <= 1.0))
+    np.testing.assert_allclose(np.sum(probs_from_dec, axis=1), [1.0, 1.0], atol=1e-6)
+    # Monotonic class order preservation
+    assert (np.argmax(probs_from_dec, axis=1) == np.argmax(raw_proba, axis=1)).all()
+
+
+def test_full_production_pipeline_inference(engine):
+    """Exercise complete production inference path from raw strings through PairwiseRequest to PairwiseResponse."""
+    req_match = PairwiseRequest(
+        claim_field=FieldCandidate(
+            field_name="landAreaAcres",
+            field_label="Campus Land Area",
+            raw_value="8.50 Acres"
+        ),
+        evidence_field=FieldCandidate(
+            field_name="landAreaAcres",
+            field_label="Registered Land Area",
+            raw_value="8.50 Acres",
+            document_id="doc-lease-01",
+            document_name="Registered_Lease_Deed.pdf",
+            page_number=3
+        ),
+        confidence_threshold=0.60
+    )
+    res_match = engine.classify(req_match)
+    assert res_match.label == PairwiseLabel.MATCH
+    assert res_match.confidence >= 0.95
+    assert res_match.requires_human_review is False
+
+    # Ambiguous address phrasing triggers abstention (p < 0.60 -> UNCERTAIN)
+    req_ambiguous = PairwiseRequest(
+        claim_field=FieldCandidate(
+            field_name="address",
+            field_label="Campus Address",
+            raw_value="Plot 12, Phase 3, Industrial Area, Sector 62, Noida"
+        ),
+        evidence_field=FieldCandidate(
+            field_name="address",
+            field_label="Campus Address",
+            raw_value="Survey No. 44/2, Near Metro Station, Sector 62, Noida",
+            document_id="doc-addr-01",
+            document_name="Title_Deed.pdf",
+            page_number=1
+        ),
+        confidence_threshold=0.60
+    )
+    res_ambiguous = engine.classify(req_ambiguous)
+    assert res_ambiguous.label == PairwiseLabel.UNCERTAIN
+    assert res_ambiguous.requires_human_review is True
+
+    # OCR degradation triggers human review
+    req_ocr = PairwiseRequest(
+        claim_field=FieldCandidate(
+            field_name="societyName",
+            field_label="Sponsoring Society",
+            raw_value="Kalyani Educational Foundation"
+        ),
+        evidence_field=FieldCandidate(
+            field_name="societyName",
+            field_label="Sponsoring Society",
+            raw_value="K@ly@n! Ed#c@t!0n@l F0und@t!0n ~~~??? [OCR UNREADABLE]",
+            document_id="doc-ocr-01",
+            document_name="Trust_Deed_Scanned.pdf",
+            page_number=2
+        ),
+        confidence_threshold=0.60
+    )
+    res_ocr = engine.classify(req_ocr)
+    assert res_ocr.label == PairwiseLabel.UNCERTAIN
+    assert res_ocr.requires_human_review is True
+
+
+

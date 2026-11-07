@@ -194,7 +194,7 @@ export interface AuditEvent {
   actorId: string;
   actorName: string;
   action: string;
-  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report';
+  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User';
   entityReference: string;
   beforeValue?: string;
   afterValue?: string;

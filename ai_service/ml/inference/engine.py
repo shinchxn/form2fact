@@ -161,8 +161,14 @@ class MLPairwiseInferenceEngine:
                 f"but classifier head expects {self.clf.n_features_in_} features."
             )
 
-        if self.is_calibrated and self.temperature != 1.0 and hasattr(self.clf, "decision_function"):
-            decision = self.clf.decision_function(X)
+        if self.is_calibrated and self.temperature != 1.0:
+            if hasattr(self.clf, "decision_function"):
+                decision = self.clf.decision_function(X)
+            elif hasattr(self.clf, "predict_proba"):
+                raw_p = self.clf.predict_proba(X)
+                decision = np.log(np.clip(raw_p, 1e-12, 1.0))
+            else:
+                raise AttributeError("Estimator has neither decision_function nor predict_proba.")
             scaled = decision / self.temperature
             exp_s = np.exp(scaled - np.max(scaled, axis=1, keepdims=True))
             probs = exp_s / np.sum(exp_s, axis=1, keepdims=True)

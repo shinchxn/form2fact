@@ -119,33 +119,137 @@ async function runDataIntegritySuite() {
     const switchBody = await switchRes.json();
     testAssert(switchBody.error.includes('disabled in production'), 'Persona switching error cites production disablement');
 
-    // 3. Bootstrap admin validation on empty database
-    const initialCleanUsers = cleanDb.getUsersCount();
-    testAssert(initialCleanUsers === 0, 'Clean database user count starts at 0');
-
-    // Direct programmatic test of secure admin creation
-    const secureAdminId = `usr-admin-${crypto.randomUUID().slice(0, 8)}`;
-    const strongPassword = 'Secur3Adm!nPassword2026#Compliance';
-    const strongHash = bcrypt.hashSync(strongPassword, 12);
-    
-    cleanDb.createUser({
-      id: secureAdminId,
-      displayName: 'System Administrator (Institutional)',
-      email: 'admin@institution.edu.in',
-      passwordHash: strongHash,
-      role: 'Administrator',
-      department: 'Compliance Operations',
-      organizationId: 'org-aicte-western',
-      createdAt: new Date().toISOString()
+    // 3. HTTP Bootstrap Endpoint Authorization & Out-of-Band Secret Defense
+    // 3a. When BOOTSTRAP_SECRET is unset, endpoint is completely disabled
+    delete process.env.BOOTSTRAP_SECRET;
+    const resNoSecretSet = await fetch(`${baseUrl}/api/v1/auth/bootstrap-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@institution.edu.in', password: 'ValidPass1234#Secure', displayName: 'Admin' })
     });
+    testAssert(resNoSecretSet.status === 403, 'HTTP bootstrap endpoint rejected with 403 when BOOTSTRAP_SECRET is unset');
 
-    testAssert(cleanDb.getUsersCount() === 1, 'Secure administrator account created successfully (user count: 1)');
-    const fetchedAdmin = cleanDb.getUserByEmail('admin@institution.edu.in');
-    testAssert(fetchedAdmin !== undefined, 'Admin record retrievable by institutional email');
-    testAssert(fetchedAdmin?.role === 'Administrator', 'Provisioned user possesses Administrator role');
-    testAssert(bcrypt.compareSync(strongPassword, fetchedAdmin?.passwordHash || ''), 'Password hash matches strong bootstrap credentials');
+    // 3b. When BOOTSTRAP_SECRET is set, test authorization enforcement
+    const testBootstrapSecret = 'super-secure-one-time-out-of-band-bootstrap-token-64-bytes';
+    process.env.BOOTSTRAP_SECRET = testBootstrapSecret;
 
-    // 4. Test BOOTSTRAP_ADMIN_* environment variable mechanism
+    // Missing secret header -> 401
+    const resMissingSecretHeader = await fetch(`${baseUrl}/api/v1/auth/bootstrap-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@institution.edu.in', password: 'ValidPass1234#Secure', displayName: 'Admin' })
+    });
+    testAssert(resMissingSecretHeader.status === 401, 'Bootstrap request without X-Bootstrap-Secret header rejected with 401');
+
+    // Incorrect secret header -> 401
+    const resWrongSecret = await fetch(`${baseUrl}/api/v1/auth/bootstrap-admin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bootstrap-secret': 'wrong-secret-token'
+      },
+      body: JSON.stringify({ email: 'admin@institution.edu.in', password: 'ValidPass1234#Secure', displayName: 'Admin' })
+    });
+    testAssert(resWrongSecret.status === 401, 'Bootstrap request with invalid X-Bootstrap-Secret rejected with 401');
+
+    // Calling bootstrap on existing database with users -> 403
+    const resExistingUsersBootstrap = await fetch(`${baseUrl}/api/v1/auth/bootstrap-admin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bootstrap-secret': testBootstrapSecret
+      },
+      body: JSON.stringify({ email: 'admin2@institution.edu.in', password: 'ValidPass1234#Secure', displayName: 'Admin 2' })
+    });
+    testAssert(resExistingUsersBootstrap.status === 403, 'Bootstrap on database with existing users rejected with 403');
+    delete process.env.BOOTSTRAP_SECRET;
+
+    // 4. Transactional Atomic Bootstrap & Concurrency Tests on Clean Database
+    const transDbPath = path.resolve(process.cwd(), 'data', `test-bootstrap-trans-${Date.now()}.db`);
+    try {
+      const transDb = new ScrutinyDatabase(transDbPath);
+      testAssert(transDb.getUsersCount() === 0, 'Clean database user count starts at 0');
+
+      // Invalid email rejected
+      const resBadEmail = transDb.bootstrapAdmin({
+        email: 'invalid-email-format',
+        password: 'ValidPassword123#',
+        displayName: 'Administrator'
+      });
+      testAssert(!resBadEmail.success && resBadEmail.statusCode === 400, 'Bootstrap rejects invalid email format');
+
+      // Short/weak password rejected
+      const resWeakPass = transDb.bootstrapAdmin({
+        email: 'admin@statutory.gov.in',
+        password: 'weak',
+        displayName: 'Administrator'
+      });
+      testAssert(!resWeakPass.success && resWeakPass.statusCode === 400, 'Bootstrap rejects password under 12 characters');
+
+      // Known trivial password rejected
+      const resTrivialPass = transDb.bootstrapAdmin({
+        email: 'admin@statutory.gov.in',
+        password: 'Admin123!',
+        displayName: 'Administrator'
+      });
+      testAssert(!resTrivialPass.success && resTrivialPass.statusCode === 400, 'Bootstrap rejects known default/trivial credentials');
+
+      // Valid provisioning succeeds
+      const resValidBoot = transDb.bootstrapAdmin({
+        email: 'admin@statutory.gov.in',
+        password: 'Secur3Adm!nPassword2026#Compliance',
+        displayName: 'Chief Administrator'
+      });
+      testAssert(resValidBoot.success && resValidBoot.statusCode === 201, 'Valid bootstrap provisioning succeeds with 201 Created');
+      testAssert(transDb.getUsersCount() === 1, 'Database contains exactly 1 user after bootstrap');
+      testAssert(resValidBoot.user?.role === 'Administrator', 'Bootstrapped user has Administrator role');
+
+      const adminRecord = transDb.getUserByEmail('admin@statutory.gov.in');
+      testAssert(adminRecord !== undefined, 'Admin record is retrievable by email');
+      testAssert(bcrypt.compareSync('Secur3Adm!nPassword2026#Compliance', (adminRecord as any).passwordHash || ''), 'Password securely hashed with bcrypt (cost 12)');
+
+      // Repeated bootstrap attempt rejected (lockout)
+      const resSecondAttempt = transDb.bootstrapAdmin({
+        email: 'attacker@institution.edu.in',
+        password: 'AttackerPassword123#',
+        displayName: 'Malicious Attacker'
+      });
+      testAssert(!resSecondAttempt.success && resSecondAttempt.statusCode === 403, 'Subsequent bootstrap attempt rejected with 403 Forbidden');
+      testAssert(transDb.getUsersCount() === 1, 'Database user count remains exactly 1');
+
+      transDb.db.close();
+    } finally {
+      if (fs.existsSync(transDbPath)) fs.unlinkSync(transDbPath);
+    }
+
+    // 5. Concurrent Bootstrap Race Condition Defense
+    const concDbPath = path.resolve(process.cwd(), 'data', `test-bootstrap-conc-${Date.now()}.db`);
+    try {
+      const concDb = new ScrutinyDatabase(concDbPath);
+      testAssert(concDb.getUsersCount() === 0, 'Concurrent test database starts at 0 users');
+
+      // Attempt two parallel bootstrap operations
+      const p1 = concDb.bootstrapAdmin({
+        email: 'admin1@statutory.gov.in',
+        password: 'ValidPassword123#One',
+        displayName: 'Admin One'
+      });
+      const p2 = concDb.bootstrapAdmin({
+        email: 'admin2@statutory.gov.in',
+        password: 'ValidPassword123#Two',
+        displayName: 'Admin Two'
+      });
+
+      const successCount = (p1.success ? 1 : 0) + (p2.success ? 1 : 0);
+      testAssert(successCount === 1, 'Atomic transaction locking ensures exactly ONE concurrent bootstrap succeeds');
+      testAssert(concDb.getUsersCount() === 1, 'Concurrent race cannot create multiple administrators');
+
+      concDb.db.close();
+    } finally {
+      if (fs.existsSync(concDbPath)) fs.unlinkSync(concDbPath);
+    }
+
+    // 6. Test BOOTSTRAP_ADMIN_* environment variable mechanism with memory scrubbing
     const envBootstrapDbPath = path.resolve(process.cwd(), 'data', `test-bootstrap-env-${Date.now()}.db`);
     try {
       process.env.BOOTSTRAP_ADMIN_EMAIL = 'provost.admin@statutory.gov.in';
@@ -154,6 +258,7 @@ async function runDataIntegritySuite() {
       testAssert(envBootstrapDb.getUsersCount() === 1, 'BOOTSTRAP_ADMIN_* environment variables auto-provision initial admin');
       const provostUser = envBootstrapDb.getUserByEmail('provost.admin@statutory.gov.in');
       testAssert(provostUser !== undefined && provostUser.role === 'Administrator', 'Auto-provisioned administrator has correct claims');
+      testAssert(process.env.BOOTSTRAP_ADMIN_PASSWORD === undefined, 'Plaintext BOOTSTRAP_ADMIN_PASSWORD is scrubbed from process memory');
       envBootstrapDb.db.close();
     } finally {
       delete process.env.BOOTSTRAP_ADMIN_EMAIL;
@@ -161,7 +266,7 @@ async function runDataIntegritySuite() {
       if (fs.existsSync(envBootstrapDbPath)) fs.unlinkSync(envBootstrapDbPath);
     }
 
-    // 5. Preservation of development mode seeding
+    // 7. Preservation of development mode seeding & Production override defense
     const devDbPath = path.resolve(process.cwd(), 'data', `test-dev-seeding-${Date.now()}.db`);
     try {
       process.env.NODE_ENV = 'development';
@@ -171,9 +276,22 @@ async function runDataIntegritySuite() {
       testAssert(devDb.getAllApplications().length >= 3, 'Isolated development mode preserves demonstration applications');
       devDb.db.close();
     } finally {
+      if (fs.existsSync(devDbPath)) fs.unlinkSync(devDbPath);
+    }
+
+    // Production mode cannot accidentally enable development demo seeding even if SEED_DEMO_DATA=true
+    const prodOverrideDbPath = path.resolve(process.cwd(), 'data', `test-prod-override-${Date.now()}.db`);
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.SEED_DEMO_DATA = 'true'; // Attacker attempts to enable demo data in production
+      const prodOverrideDb = new ScrutinyDatabase(prodOverrideDbPath);
+      testAssert(prodOverrideDb.getUsersCount() === 0, 'Production mode ignores SEED_DEMO_DATA=true: zero demo users created');
+      testAssert(prodOverrideDb.getAllApplications().length === 0, 'Production mode ignores SEED_DEMO_DATA=true: zero demo apps created');
+      prodOverrideDb.db.close();
+    } finally {
       process.env.NODE_ENV = 'production';
       process.env.SEED_DEMO_DATA = 'false';
-      if (fs.existsSync(devDbPath)) fs.unlinkSync(devDbPath);
+      if (fs.existsSync(prodOverrideDbPath)) fs.unlinkSync(prodOverrideDbPath);
     }
 
     // -------------------------------------------------------------------------
@@ -547,6 +665,47 @@ async function runDataIntegritySuite() {
     testAssert(decAuditEvent !== undefined, 'Audit trail contains Application Decision: Approved entry');
     testAssert(decAuditEvent?.actorId === westernReviewer.id, 'Audit entry binds authenticated reviewer ID');
 
+    // 4. Additional Attack Surface & Integrity Tests:
+    // 4a. Altered or non-existent application identifier
+    const resAlteredApp = await fetch(`${baseUrl}/api/v1/applications/app-non-existent-999/decision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${westernReviewerToken}`
+      },
+      body: JSON.stringify({ decisionType: 'Approved', rationale: 'Attempt on altered application ID' })
+    });
+    testAssert(resAlteredApp.status === 404, 'Decision request on non-existent or altered application ID rejected with 404');
+
+    // 4b. Repeated decisions on same application append to durable audit ledger
+    const resSecondDec = await fetch(`${baseUrl}/api/v1/applications/app-1104/decision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${westernReviewerToken}`
+      },
+      body: JSON.stringify({
+        decisionType: 'Clarification Required',
+        rationale: 'Follow-up scrutiny action: requiring supplementary cadastral survey map.'
+      })
+    });
+    testAssert(resSecondDec.status === 200, 'Subsequent decision updates application review status and appends to history');
+    const allDecisionsForApp = Number((db.db.prepare('SELECT COUNT(*) as c FROM application_decisions WHERE applicationId = ?').get('app-1104') as any).c);
+    testAssert(allDecisionsForApp >= 2, 'Repeated decisions append historical records rather than silently overwriting');
+
+    // 4c. Unauthorized deletion attempts on audit and decision endpoints
+    const resDeleteAudit = await fetch(`${baseUrl}/api/v1/audit`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${westernReviewerToken}` }
+    });
+    testAssert(resDeleteAudit.status === 404, 'Unauthorized deletion attempt on audit events rejected with 404 Not Found');
+
+    const resDeleteDec = await fetch(`${baseUrl}/api/v1/applications/app-1104/decision`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${westernReviewerToken}` }
+    });
+    testAssert(resDeleteDec.status === 404, 'Unauthorized deletion attempt on decisions rejected with 404 Not Found');
+
     // -------------------------------------------------------------------------
     // TEST 10 & 11: Immutable Audit Trail & Route Defenses
     // -------------------------------------------------------------------------
@@ -609,6 +768,19 @@ async function runDataIntegritySuite() {
     const reloadedApps = reloadedDb.getAllApplications();
     testAssert(reloadedApps.length >= 1, 'Genuine application records persist across restart');
     testAssert(reloadedApps.some(a => a.id === realApp.id), 'Persistent record ID matches original');
+
+    // Test Database Backup & Restore Integrity
+    const backupDbPath = path.resolve(process.cwd(), 'data', `test-backup-${Date.now()}.db`);
+    try {
+      fs.copyFileSync(testDbPath, backupDbPath);
+      const restoredDb = new ScrutinyDatabase(backupDbPath);
+      testAssert(restoredDb.getAllApplications().length >= 1, 'Restored database retains application records');
+      testAssert(restoredDb.getDocumentsByApplication(realApp.id).length === 1, 'Restored database retains document records');
+      testAssert(restoredDb.getAuditEvents().length >= 2, 'Restored database retains audit ledger history');
+      restoredDb.db.close();
+    } finally {
+      if (fs.existsSync(backupDbPath)) fs.unlinkSync(backupDbPath);
+    }
 
     rawSqlite.close();
   } finally {

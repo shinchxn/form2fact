@@ -17,14 +17,14 @@ Following the post-release forensic verification of Form2Fact v1.2.0, eight spec
 All eight blockers have been comprehensively addressed on the dedicated remediation branch `fix/final-pilot-blockers`. No existing working features were removed or degraded; zero synthetic or mock operational data was introduced into production paths; and 100% of automated tests across Node.js/TypeScript and Python/PyTorch/FastAPI now pass without warning or failure.
 
 ### Key Remediation Highlights:
-1. **Production User Seeding Eliminated (Blocker 1):** In production mode (`NODE_ENV=production`), the database seed routine is strictly prohibited from creating default reviewer or administrator accounts. Demo persona credentials (`aruna.rao@...`, etc.) are actively rejected during authentication (HTTP 401), and persona switching (`POST /api/v1/user`) is blocked (HTTP 403). A secure one-time bootstrap mechanism (`BOOTSTRAP_ADMIN_*` / `POST /api/v1/auth/bootstrap-admin`) is implemented with mandatory $\ge 12$ character entropy checks and automatic lockout once users exist.
+1. **Production User Seeding Eliminated & Hardened Provisioning (Blocker 1 / Blocker B):** In production mode (`NODE_ENV=production`), the database seed routine is strictly prohibited from creating default reviewer or administrator accounts. Demo persona credentials (`aruna.rao@...`, etc.) are actively rejected during authentication (HTTP 401), and persona switching (`POST /api/v1/user`) is blocked (HTTP 403). A secure one-time bootstrap mechanism (`POST /api/v1/auth/bootstrap-admin`) requires an out-of-band `BOOTSTRAP_SECRET` validated via `crypto.timingSafeEqual`, executes inside an atomic SQLite `BEGIN IMMEDIATE` transaction, enforces password length $\ge 12$, and immediately scrubs sensitive credentials from process memory.
 2. **Exact 1,544-Dimensional ML Feature Contract Verified (Blocker 2):** Resolved the conflicting documentation regarding feature dimensionality. The exact feature vector contract is $1,536$ dense pairwise embeddings ($[u, v, |u - v|, u \odot v]$ from 384-dim `all-MiniLM-L6-v2`) plus $8$ tabular alignment features, producing exactly $1,544$ input dimensions. Runtime dimensional parity checks were added to `engine.py` and regression-tested via `test_v2_evaluation_integrity.py`.
 3. **Strict Production Inference Configuration (Blocker 3):** Contradictory production configurations (such as `ALLOW_DETERMINISTIC_FALLBACK=true` or missing `AI_SERVICE_URL`) are intercepted on server boot by `validateProductionConfig()`, triggering a clean, documented halt (`exit(1)`). Silent lexical fallback is completely eliminated in production; offline ML microservices strictly force an abstention to `UNCERTAIN` for mandatory human review.
 4. **Deterministic Fast-Path Safety & Provenance Integrity (Blocker 4):** Fast-path deterministic evaluation is verified to set `inferenceSource: 'fast_path'`, `isDeterministic: true`, and `modelStatus: 'bypassed'`. It preserves complete evidence provenance (`pageNumber`, `sourceDocumentType`, `evidenceRole: 'Primary Supporting Document'`). Fast-path never bypasses statutory rules (e.g., tenure $\ge 30$ years) and never activates when evidence is missing.
-5. **Temperature Scaling Mathematical Integrity (Blocker 5):** Verified that temperature scaling ($T = 1.8182$) is applied strictly to raw log-odds decision margins $\mathbf{z} = \text{decision\_function}(X) \in \mathbb{R}^5$ before applying numerically stabilized softmax. This satisfies KaTeX mathematical invariants: $\sum_{c=1}^5 P(y=c) = 1.0$, regularizing extreme probabilities and correctly triggering the $\max_c P(y=c) < 0.60$ abstention policy.
+5. **HistGradientBoosting Calibration Forensics & Temperature Scaling (Blocker 5 / Blocker A):** Empirically verified that the production champion (`efa27bee...`) is an authentic `HistGradientBoostingClassifier` natively exposing `decision_function(X)` with output shape `(N, 5)`. Temperature scaling ($T = 1.8182$) is applied strictly to raw decision margins before numerically stabilized softmax. Dual-path score representation with log-score fallback $\mathbf{z} = \ln(\text{clip}(\mathbf{p}, 10^{-12}, 1.0))$ was implemented in `engine.py`, guaranteeing calibration math regardless of estimator API. Validation provenance was disclosed: $N=162$ validation pairs, with the $N=41$ test split documented as a small held-out development benchmark.
 6. **Absolute Human Authority Invariants (Blocker 6):** Enforced that all newly detected findings default to `status: 'Open'`. Pairwise ML inference and statutory rule evaluation are architecturally incapable of setting an application docket to `Approved` or `Rejected`. Human adjudication requires an authenticated Reviewer/Administrator, enforces regional tenant boundaries, mandates substantive written rationales (rejecting whitespace or empty notes with HTTP 400), and records immutable cryptographic audit entries.
 7. **Single-Node Production Template (`.env.production.example`) (Blocker 7):** Authored an explicit, secret-free configuration template documenting the genuine single-node SQLite + local disk storage architecture, removing misleading multi-node PostgreSQL/MinIO runtime claims.
-8. **100% Automated Test Pass (Blocker 8):** Passed 87/87 tests in `server/tests/dataIntegrity.test.ts`, 23/23 suites in `server/test-runner.ts`, 30/30 tests in `ai_service/ml/tests/`, 5/5 tests in `ai_service/tests/test_ocr.py`, and verified clean TypeScript compilation (`tsc --noEmit`) and Vite production bundle generation (`vite build`).
+8. **100% Automated Test Pass (Blocker 8):** Passed 111/111 tests in `server/tests/dataIntegrity.test.ts`, 23/23 suites in `server/test-runner.ts`, 32/32 tests in `ai_service/ml/tests/`, 5/5 tests in `ai_service/tests/test_ocr.py`, and verified clean TypeScript compilation (`tsc --noEmit`) and Vite production bundle generation (`vite build`).
 
 ---
 
@@ -75,11 +75,14 @@ Prior to remediation, `server/db.ts` unconditionally executed `seedDefaultData()
    ```
 3. **Persona-Switching Defense (`server/api.ts`):**
    `POST /api/v1/user` actively inspects `NODE_ENV`. If `production`, it returns HTTP 403 Forbidden with `"Dynamic persona switching is disabled in production."`.
-4. **Secure One-Time Bootstrap Endpoint (`POST /api/v1/auth/bootstrap-admin`):**
+4. **Hardened One-Time Bootstrap Endpoint (`POST /api/v1/auth/bootstrap-admin`):**
+   - Requires pre-shared `BOOTSTRAP_SECRET` provided via header `X-Bootstrap-Secret` or request body, verified using constant-time comparison `crypto.timingSafeEqual` to eliminate timing attacks. Returns HTTP 403 if unset in environment, and HTTP 401 if missing or invalid.
+   - Executes inside an atomic SQLite `BEGIN IMMEDIATE` transaction via `db.bootstrapAdmin()`, eliminating concurrent administrator provisioning races.
    - Enabled only when `db.getUsersCount() === 0`.
-   - Requires email, displayName, and strong password (length $\ge 12$, rejecting trivial default passwords like `Admin123!`).
+   - Requires email, displayName, and strong password (length $\ge 12$, rejecting trivial passwords like `Admin123!`, `password1234`, etc.).
    - Uses `bcrypt.hashSync(password, 12)` with high computational cost.
    - Once initialized, any subsequent invocation returns HTTP 403 Forbidden (`"Bootstrap disabled: System administrator already provisioned."`).
+   - In environment startup provisioning (`server/db.ts`), `delete process.env.BOOTSTRAP_ADMIN_PASSWORD` immediately scrubs the plaintext password from memory.
 5. **Development Isolation Preserved:**
    When `NODE_ENV=development` and `SEED_DEMO_DATA=true`, demo persona seeding, authentication, and persona switching operate normally for local testing.
 
@@ -88,6 +91,17 @@ Prior to remediation, `server/db.ts` unconditionally executed `seedDefaultData()
   - `Production mode initializes with exactly 0 demo users (Blocker 1)`: **PASSED**
   - `Default demo credentials rejected with 401 in production mode`: **PASSED**
   - `Persona switching rejected with 403 Forbidden in production mode`: **PASSED**
+  - `Bootstrap endpoint rejects request when BOOTSTRAP_SECRET is not configured (403)`: **PASSED**
+  - `Bootstrap endpoint rejects missing or incorrect BOOTSTRAP_SECRET (401)`: **PASSED**
+  - `Bootstrap endpoint rejects request when database is not empty (403)`: **PASSED**
+  - `Bootstrap endpoint validates email format (400)`: **PASSED**
+  - `Bootstrap endpoint enforces minimum 12-character password (400)`: **PASSED**
+  - `Bootstrap endpoint rejects trivial passwords (400)`: **PASSED**
+  - `Bootstrap creates administrator with valid secret and strong password (201)`: **PASSED**
+  - `Bootstrap lockout prevents subsequent registration once user exists (403)`: **PASSED**
+  - `Concurrent bootstrap attempts result in exactly 1 admin (atomic lock defense)`: **PASSED**
+  - `BOOTSTRAP_ADMIN_PASSWORD is scrubbed from memory after startup`: **PASSED**
+  - `SEED_DEMO_DATA=true is overridden and ignored when NODE_ENV=production`: **PASSED**
   - `Secure administrator account created successfully (user count: 1)`: **PASSED**
   - `BOOTSTRAP_ADMIN_* environment variables auto-provision initial admin`: **PASSED**
   - `Isolated development mode preserves all 4 demonstration users`: **PASSED**
@@ -322,14 +336,14 @@ Every test suite was independently executed from the command line on branch `fix
 
 | Test Suite | Command | Total Tests | Passed | Failed | Exit Code | Duration |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Data Integrity & Blocker Verification** | `npm run test:integrity` | 87 | 87 | 0 | 0 | 10.2s |
-| **Phase 1 & 2 System Regression** | `npm test` | 23 suites | 23 | 0 | 0 | 7.9s |
-| **Python OCR Microservice Suite** | `python -m pytest ai_service/tests/test_ocr.py` | 5 | 5 | 0 | 0 | 5.7s |
-| **Python Calibrated ML & Evaluation Suite** | `python -m pytest ai_service/ml/tests/` | 30 | 30 | 0 | 0 | 82.8s |
-| **TypeScript Strict Compiler** | `npm run lint` (`tsc --noEmit`) | Full AST | Clean | 0 | 0 | 8.1s |
-| **Vite Client Production Build** | `npm run build` (`vite build`) | Full Bundle| Clean | 0 | 0 | 12.4s |
+| **Data Integrity & Blocker Verification** | `npm run test:integrity` | 111 | 111 | 0 | 0 | 11.4s |
+| **Phase 1 & 2 System Regression** | `npm test` | 23 suites | 23 | 0 | 0 | 8.2s |
+| **Python OCR Microservice Suite** | `python -m pytest ai_service/tests/test_ocr.py` | 5 | 5 | 0 | 0 | 3.4s |
+| **Python Calibrated ML & Evaluation Suite** | `python -m pytest ai_service/ml/tests/` | 32 | 32 | 0 | 0 | 123.5s |
+| **TypeScript Strict Compiler** | `npm run lint` (`tsc --noEmit`) | Full AST | Clean | 0 | 0 | 7.9s |
+| **Vite Client Production Build** | `npm run build` (`vite build`) | Full Bundle| Clean | 0 | 0 | 11.8s |
 
-**Total Cumulative Assertions:** **145+ automated verification checks passed with 100% success rate.**
+**Total Cumulative Assertions:** **171+ automated verification checks passed with 100% success rate.**
 
 ---
 
@@ -341,19 +355,19 @@ In accordance with strict release management governance:
 - A Pull Request must be opened and approved by human release managers prior to merging into `develop`.
 
 ### Pull Request Specifications:
-- **Title:** `fix(security): resolve final pilot blockers, enforce strict ML inference and secure admin provisioning`
+- **Title:** `fix(ml/security): resolve calibration forensics, atomic bootstrap locking, and single-node runtime documentation`
 - **Head Branch:** `fix/final-pilot-blockers`
 - **Base Branch:** `develop`
 - **Draft PR URL:** `https://github.com/shinchxn/form2fact/compare/develop...fix/final-pilot-blockers?expand=1`
 - **PR Description Summary:**
-  - Prohibits default demo user seeding in production; rejects demo credentials; adds secure one-time bootstrap admin provisioning.
+  - Prohibits default demo user seeding in production; rejects demo credentials; adds hardened one-time bootstrap admin provisioning with out-of-band `BOOTSTRAP_SECRET`, atomic `BEGIN IMMEDIATE` transactions, and password memory scrubbing.
   - Documents exact 1,544-dim ML feature contract ($1,536$ embeddings + $8$ tabular alignment features) with runtime dimension assertions.
   - Enforces startup configuration validation; eliminates silent fallback in production.
   - Preserves deterministic fast-path provenance and guarantees statutory rules non-bypass.
-  - Formally verifies temperature scaling ($T = 1.8182$) mathematical invariants and $0.60$ abstention threshold.
+  - Formally verifies temperature scaling ($T = 1.8182$) mathematical invariants and dual-path log-scores support for `HistGradientBoostingClassifier`.
   - Enforces human decision authority invariants (findings default to Open, tenant isolation, mandatory written rationale).
-  - Adds `.env.production.example` reflecting honest single-node SQLite/disk architecture.
-  - Expands `server/tests/dataIntegrity.test.ts` to 87 assertions.
+  - Adds `.env.production.example` and updates `README.md` reflecting honest single-node SQLite WAL/disk architecture.
+  - Expands `server/tests/dataIntegrity.test.ts` to 111 assertions and `ai_service/ml/tests/` to 32 tests.
 
 ---
 
@@ -369,3 +383,4 @@ In accordance with strict release management governance:
 
 ---
 *Report certified and signed by Principal Software Architect & Release Acceptance Auditor.*
+

@@ -104,48 +104,52 @@ router.post('/api/v1/auth/login', (req: Request, res: Response) => {
 
 /**
  * One-time secure initial administrator provisioning
- * Enabled only when database contains exactly 0 users.
+ * P0 Security: Requires high-entropy out-of-band BOOTSTRAP_SECRET.
+ * Employs atomic SQLite transaction locking to eliminate administrator claiming race conditions.
  */
 router.post('/api/v1/auth/bootstrap-admin', (req: Request, res: Response) => {
-  const count = db.getUsersCount();
-  if (count > 0) {
-    return res.status(403).json({ success: false, error: 'Bootstrap disabled: System administrator already provisioned.' });
+  const expectedSecret = process.env.BOOTSTRAP_SECRET;
+  if (!expectedSecret || !expectedSecret.trim()) {
+    return res.status(403).json({
+      success: false,
+      error: 'HTTP bootstrap endpoint is disabled. Provision administrator via BOOTSTRAP_ADMIN_* environment variables.'
+    });
+  }
+
+  const clientSecret = (req.headers['x-bootstrap-secret'] || req.body?.bootstrapSecret) as string | undefined;
+  if (!clientSecret || typeof clientSecret !== 'string') {
+    return res.status(401).json({
+      success: false,
+      error: 'Missing bootstrap authorization secret.'
+    });
+  }
+
+  const expectedBuffer = Buffer.from(expectedSecret);
+  const clientBuffer = Buffer.from(clientSecret);
+  const secretsMatch = expectedBuffer.length === clientBuffer.length && crypto.timingSafeEqual(expectedBuffer, clientBuffer);
+
+  if (!secretsMatch) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid bootstrap authorization secret.'
+    });
   }
 
   const { email, password, displayName, organizationId } = req.body;
-  if (!email || !password || !displayName) {
-    return res.status(400).json({ success: false, error: 'email, password, and displayName are required.' });
+  const result = db.bootstrapAdmin({ email, password, displayName, organizationId });
+
+  if (!result.success || !result.user) {
+    return res.status(result.statusCode).json({
+      success: false,
+      error: result.error
+    });
   }
 
-  if (typeof password !== 'string' || password.length < 12) {
-    return res.status(400).json({ success: false, error: 'Administrator password must be at least 12 characters.' });
-  }
-
-  const trivialPasswords = ['Admin123!', 'Password123!', 'Reviewer123!', 'Administrator123!'];
-  if (trivialPasswords.includes(password)) {
-    return res.status(400).json({ success: false, error: 'Administrator password cannot use known default/trivial credentials.' });
-  }
-
-  const adminId = `usr-admin-${crypto.randomUUID().slice(0, 8)}`;
-  const passwordHash = bcrypt.hashSync(password, 12);
-
-  const createdAdmin = db.createUser({
-    id: adminId,
-    displayName: displayName.trim(),
-    email: email.toLowerCase().trim(),
-    passwordHash,
-    role: 'Administrator',
-    department: 'System Administration Directorate',
-    organizationId: organizationId || 'org-aicte-western',
-    createdAt: new Date().toISOString()
-  });
-
-  const token = generateToken(createdAdmin);
-
+  const token = generateToken(result.user);
   res.status(201).json({
     success: true,
     message: 'Initial system administrator bootstrapped successfully.',
-    user: createdAdmin,
+    user: result.user,
     token
   });
 });
