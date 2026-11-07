@@ -481,15 +481,20 @@ export const AnnotationWorkbenchView: React.FC<AnnotationWorkbenchViewProps> = (
               </div>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-xl font-bold text-[#0A2540] font-mono tabular-nums">
-                  {metrics.cohensKappa !== null ? metrics.cohensKappa.toFixed(3) : 'N/A'}
+                  {metrics.cohensKappa !== null ? metrics.cohensKappa.toFixed(3) : 'Undefined'}
                 </span>
                 <span className="text-xs text-[#475569] font-mono">
                   (raw: {(metrics.rawAgreementRate * 100).toFixed(1)}%)
                 </span>
               </div>
-              <div className="text-[11px] font-medium text-[#0D9488] truncate mt-0.5">
+              <div className="text-[11px] font-medium text-[#0D9488] truncate mt-0.5" title={metrics.cohensKappaInterpretation}>
                 {metrics.cohensKappaInterpretation}
               </div>
+              {metrics.pairedCount !== undefined && metrics.pairedCount > 0 && !metrics.isSampleSizeSufficient && (
+                <div className="text-[10px] text-[#B45309] bg-[#FEF3C7] px-1.5 py-0.5 rounded mt-1 font-medium">
+                  Sample N={metrics.pairedCount} &lt; 30 (Advisory Only)
+                </div>
+              )}
             </div>
 
             {/* Card 3: Adjudication & Disputes */}

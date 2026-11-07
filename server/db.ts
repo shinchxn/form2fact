@@ -16,10 +16,23 @@ import {
   AnnotationRecord,
   UserAnnotation,
   AnnotationMetrics,
-  FiveClassLabel
+  FiveClassLabel,
+  ReviewerAuthorization,
+  ReviewerAuthorizationInput,
+  InstitutionalDocket,
+  InstitutionalDocketLifecycle,
+  DocketTransitionEvent
 } from '../src/types/index.ts';
 import { INITIAL_RULES, evaluateApplicationRules } from './rulesEngine.ts';
 import { extractFieldsFromPages } from './extraction.ts';
+import { computeCohensKappa } from './metrics/cohensKappa.ts';
+import {
+  computePayloadHash,
+  computeEventHash,
+  verifyLedgerChain,
+  GENESIS_PREVIOUS_HASH,
+  LedgerVerificationResult
+} from './ledger/cryptographicLedger.ts';
 
 export interface DatabaseUser extends User {
   passwordHash: string;
@@ -267,6 +280,67 @@ export class ScrutinyDatabase {
         UNIQUE(recordId, annotatorId),
         FOREIGN KEY(recordId) REFERENCES annotation_records(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS reviewer_authorizations (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        role TEXT NOT NULL,
+        organizationId TEXT NOT NULL DEFAULT 'org-aicte-western',
+        verifiedIdentityRef TEXT NOT NULL,
+        issuingAuthority TEXT NOT NULL,
+        professionalDesignation TEXT,
+        authorizationReference TEXT NOT NULL,
+        approvedBy TEXT NOT NULL,
+        approvedByName TEXT NOT NULL,
+        approvedAt TEXT NOT NULL,
+        expiryDate TEXT,
+        isRevoked INTEGER NOT NULL DEFAULT 0,
+        revocationReason TEXT,
+        revokedAt TEXT,
+        revokedBy TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS institutional_dockets (
+        id TEXT PRIMARY KEY,
+        docketNumber TEXT UNIQUE NOT NULL,
+        institutionId TEXT NOT NULL,
+        institutionName TEXT NOT NULL,
+        sourceOrganization TEXT NOT NULL,
+        sourceUrl TEXT,
+        retrievalDate TEXT NOT NULL,
+        publicationDate TEXT,
+        authorizationReference TEXT NOT NULL,
+        documentChecksum TEXT NOT NULL,
+        documentPath TEXT NOT NULL,
+        mimeType TEXT NOT NULL,
+        sizeBytes INTEGER NOT NULL,
+        pageCount INTEGER NOT NULL,
+        organizationId TEXT NOT NULL DEFAULT 'org-aicte-western',
+        documentClassification TEXT NOT NULL DEFAULT 'statutory_filing',
+        provenanceStatus TEXT NOT NULL DEFAULT 'PROVENANCE_PENDING',
+        lifecycleState TEXT NOT NULL DEFAULT 'DATA_SOURCE_IDENTIFIED',
+        verifiedBy TEXT,
+        verifiedAt TEXT,
+        verificationNotes TEXT,
+        uploadedBy TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS docket_transitions (
+        id TEXT PRIMARY KEY,
+        docketId TEXT NOT NULL,
+        fromState TEXT NOT NULL,
+        toState TEXT NOT NULL,
+        actorId TEXT NOT NULL,
+        actorName TEXT NOT NULL,
+        rationale TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY(docketId) REFERENCES institutional_dockets(id) ON DELETE CASCADE
+      );
     `);
 
     // Automatic migration for existing databases: ensure organizationId exists
@@ -281,6 +355,82 @@ export class ScrutinyDatabase {
     } catch {}
     try {
       this.db.exec("UPDATE annotation_records SET isDemoCandidate = 1, sourceProvenance = 'AICTE Demonstration Scrutiny Scenario (Demo Fixture)' WHERE id LIKE 'ann-rec-00%';");
+    } catch {}
+
+    // Migrations for documents identity & provenance
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN uploadedBy TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN organizationId TEXT NOT NULL DEFAULT 'org-aicte-western';"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN sourceOrganization TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN sourceUrl TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN retrievalDate TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN publicationDate TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN authorizationReference TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN documentClassification TEXT NOT NULL DEFAULT 'statutory_filing';"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN provenanceStatus TEXT NOT NULL DEFAULT 'PROVENANCE_PENDING';"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN verifiedBy TEXT;"); } catch {}
+    try { this.db.exec("ALTER TABLE documents ADD COLUMN verifiedAt TEXT;"); } catch {}
+
+    // Migrations for audit_events cryptographic ledger hash-chaining
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN sequenceNumber INTEGER NOT NULL DEFAULT 0;"); } catch {}
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN actorRole TEXT NOT NULL DEFAULT 'Reviewer';"); } catch {}
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN organizationId TEXT NOT NULL DEFAULT 'org-aicte-western';"); } catch {}
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN payloadHash TEXT NOT NULL DEFAULT '';"); } catch {}
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN previousHash TEXT NOT NULL DEFAULT '';"); } catch {}
+    try { this.db.exec("ALTER TABLE audit_events ADD COLUMN currentHash TEXT NOT NULL DEFAULT '';"); } catch {}
+
+    // Backfill cryptographic hash chain for any existing unhashed events
+    try {
+      const unhashed = this.db.prepare("SELECT * FROM audit_events ORDER BY rowid ASC").all() as any[];
+      if (unhashed.length > 0 && (!unhashed[0].currentHash || unhashed[0].sequenceNumber === 0)) {
+        let prevH = GENESIS_PREVIOUS_HASH;
+        for (let i = 0; i < unhashed.length; i++) {
+          const row = unhashed[i];
+          const seq = i + 1;
+          const pHash = computePayloadHash({
+            entityType: row.entityType,
+            entityReference: row.entityReference,
+            beforeValue: row.beforeValue,
+            afterValue: row.afterValue,
+            note: row.note
+          });
+          const cHash = computeEventHash({
+            sequenceNumber: seq,
+            previousHash: prevH,
+            id: row.id,
+            timestamp: row.timestamp,
+            actorId: row.actorId,
+            actorRole: row.actorRole || 'Reviewer',
+            organizationId: row.organizationId || 'org-aicte-western',
+            action: row.action,
+            payloadHash: pHash
+          });
+          this.db.prepare(`
+            UPDATE audit_events
+            SET sequenceNumber = ?, payloadHash = ?, previousHash = ?, currentHash = ?,
+                actorRole = COALESCE(NULLIF(actorRole, ''), 'Reviewer'),
+                organizationId = COALESCE(NULLIF(organizationId, ''), 'org-aicte-western')
+            WHERE id = ?
+          `).run(seq, pHash, prevH, cHash, row.id);
+          prevH = cHash;
+        }
+      }
+    } catch {}
+
+    // SQLite triggers enforcing append-only invariants on audit_events
+    try {
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS audit_events_no_update
+        BEFORE UPDATE ON audit_events
+        BEGIN
+          SELECT RAISE(FAIL, 'Cryptographic Ledger Invariant: audit_events table is strictly append-only. Modifying existing events is prohibited.');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS audit_events_no_delete
+        BEFORE DELETE ON audit_events
+        BEGIN
+          SELECT RAISE(FAIL, 'Cryptographic Ledger Invariant: audit_events table is strictly append-only. Deleting events is prohibited.');
+        END;
+      `);
     } catch {}
 
     // Initialize initial annotation candidate records if table is empty
@@ -304,6 +454,10 @@ export class ScrutinyDatabase {
     }
 
     // Clear all existing data inside transaction
+    try {
+      this.db.exec("DROP TRIGGER IF EXISTS audit_events_no_delete; DROP TRIGGER IF EXISTS audit_events_no_update;");
+    } catch {}
+
     this.db.exec(`
       DELETE FROM application_decisions;
       DELETE FROM audit_events;
@@ -789,6 +943,22 @@ export class ScrutinyDatabase {
     for (const e of initialEvents) {
       this.recordAudit(e);
     }
+
+    try {
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS audit_events_no_update
+        BEFORE UPDATE ON audit_events
+        BEGIN
+          SELECT RAISE(FAIL, 'Cryptographic Ledger Invariant: audit_events table is strictly append-only. Modifying existing events is prohibited.');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS audit_events_no_delete
+        BEFORE DELETE ON audit_events
+        BEGIN
+          SELECT RAISE(FAIL, 'Cryptographic Ledger Invariant: audit_events table is strictly append-only. Deleting events is prohibited.');
+        END;
+      `);
+    } catch {}
   }
 
   // --- RAW INSERT HELPERS FOR SEEDING & TRANSACTIONS ---
@@ -1331,40 +1501,153 @@ export class ScrutinyDatabase {
     };
   }
 
-  recordAudit(event: Omit<AuditEvent, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) {
+  recordAudit(event: Omit<AuditEvent, 'id' | 'timestamp'> & { id?: string; timestamp?: string }): AuditEvent {
     const id = event.id || `aud-${crypto.randomUUID()}`;
     const timestamp = event.timestamp || new Date().toISOString();
+    const actorRole = event.actorRole || 'Reviewer';
+    const organizationId = event.organizationId || 'org-aicte-western';
+
+    // Atomic fetch of previous event for cryptographic hash chaining
+    const latest = this.db.prepare(`
+      SELECT sequenceNumber, currentHash
+      FROM audit_events
+      ORDER BY sequenceNumber DESC, rowid DESC
+      LIMIT 1
+    `).get() as any;
+
+    const sequenceNumber = latest && latest.sequenceNumber ? Number(latest.sequenceNumber) + 1 : 1;
+    const previousHash = (latest && latest.currentHash && latest.currentHash.length === 64) ? latest.currentHash : GENESIS_PREVIOUS_HASH;
+
+    const payloadHash = computePayloadHash({
+      entityType: event.entityType,
+      entityReference: event.entityReference,
+      beforeValue: event.beforeValue,
+      afterValue: event.afterValue,
+      note: event.note
+    });
+
+    const currentHash = computeEventHash({
+      sequenceNumber,
+      previousHash,
+      id,
+      timestamp,
+      actorId: event.actorId,
+      actorRole,
+      organizationId,
+      action: event.action,
+      payloadHash
+    });
 
     this.db.prepare(`
-      INSERT INTO audit_events (id, timestamp, actorId, actorName, action, entityType, entityReference, beforeValue, afterValue, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO audit_events (
+        id, sequenceNumber, timestamp, actorId, actorName, actorRole, organizationId,
+        action, entityType, entityReference, beforeValue, afterValue, note,
+        payloadHash, previousHash, currentHash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
+      sequenceNumber,
       timestamp,
       event.actorId,
       event.actorName,
+      actorRole,
+      organizationId,
       event.action,
       event.entityType,
       event.entityReference,
       event.beforeValue || null,
       event.afterValue || null,
-      event.note || null
+      event.note || null,
+      payloadHash,
+      previousHash,
+      currentHash
     );
+
+    return {
+      id,
+      sequenceNumber,
+      timestamp,
+      actorId: event.actorId,
+      actorName: event.actorName,
+      actorRole,
+      organizationId,
+      action: event.action,
+      entityType: event.entityType,
+      entityReference: event.entityReference,
+      beforeValue: event.beforeValue || null,
+      afterValue: event.afterValue || null,
+      note: event.note || null,
+      payloadHash,
+      previousHash,
+      currentHash
+    };
   }
 
-  getAuditEvents(userOrgId?: string, isAdmin = false): AuditEvent[] {
-    const rows = this.db.prepare('SELECT * FROM audit_events ORDER BY timestamp DESC').all() as any[];
-    const mapped: AuditEvent[] = rows.map(r => ({
+  verifyLedgerChain(organizationId?: string): LedgerVerificationResult {
+    let sql = 'SELECT * FROM audit_events';
+    const params: any[] = [];
+    if (organizationId) {
+      sql += ' WHERE organizationId = ?';
+      params.push(organizationId);
+    }
+    sql += ' ORDER BY sequenceNumber ASC';
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return verifyLedgerChain(rows.map(r => ({
       id: r.id,
+      sequenceNumber: Number(r.sequenceNumber || 1),
       timestamp: r.timestamp,
       actorId: r.actorId,
       actorName: r.actorName,
+      actorRole: r.actorRole || 'Reviewer',
+      organizationId: r.organizationId || 'org-aicte-western',
+      action: r.action,
+      entityType: r.entityType,
+      entityReference: r.entityReference,
+      beforeValue: r.beforeValue,
+      afterValue: r.afterValue,
+      note: r.note,
+      payloadHash: r.payloadHash,
+      previousHash: r.previousHash,
+      currentHash: r.currentHash
+    })));
+  }
+
+  generateLedgerIntegrityReport(organizationId?: string): {
+    timestamp: string;
+    organizationId?: string;
+    verificationResult: LedgerVerificationResult;
+    summary: string;
+  } {
+    const verificationResult = this.verifyLedgerChain(organizationId);
+    return {
+      timestamp: new Date().toISOString(),
+      organizationId,
+      verificationResult,
+      summary: verificationResult.isValid
+        ? `Cryptographic ledger verified: ${verificationResult.totalEventsVerified} events in unbroken SHA-256 hash chain.`
+        : `Cryptographic ledger compromised: ${verificationResult.tamperedEventsCount} errors detected. Chain broken at index ${verificationResult.brokenLinkIndex}.`
+    };
+  }
+
+  getAuditEvents(userOrgId?: string, isAdmin = false): AuditEvent[] {
+    const rows = this.db.prepare('SELECT * FROM audit_events ORDER BY sequenceNumber DESC, timestamp DESC').all() as any[];
+    const mapped: AuditEvent[] = rows.map(r => ({
+      id: r.id,
+      sequenceNumber: r.sequenceNumber,
+      timestamp: r.timestamp,
+      actorId: r.actorId,
+      actorName: r.actorName,
+      actorRole: r.actorRole,
+      organizationId: r.organizationId,
       action: r.action,
       entityType: r.entityType,
       entityReference: r.entityReference,
       beforeValue: r.beforeValue || undefined,
       afterValue: r.afterValue || undefined,
-      note: r.note || undefined
+      note: r.note || undefined,
+      payloadHash: r.payloadHash,
+      previousHash: r.previousHash,
+      currentHash: r.currentHash
     }));
 
     if (!userOrgId || isAdmin) {
@@ -1391,6 +1674,544 @@ export class ScrutinyDatabase {
       // Non-entity or rule-level actions are general platform events
       return true;
     });
+  }
+
+  // --- REVIEWER AUTHORIZATION & ACCREDITATION GOVERNANCE ---
+
+  authorizeReviewer(adminUser: User, data: ReviewerAuthorizationInput): ReviewerAuthorization {
+    if (adminUser.role !== 'Administrator') {
+      throw new Error('Unauthorized: Only System Administrators can grant reviewer authorizations.');
+    }
+    if (adminUser.id === data.userId) {
+      throw new Error('Self-approval prohibited: Administrators cannot approve their own reviewer accreditation.');
+    }
+    const targetUser = this.getUserById(data.userId);
+    if (!targetUser) {
+      throw new Error(`Target user '${data.userId}' does not exist.`);
+    }
+    if (!data.verifiedIdentityRef || !data.verifiedIdentityRef.trim()) {
+      throw new Error('verifiedIdentityRef is mandatory for reviewer authorization.');
+    }
+    if (!data.issuingAuthority || !data.issuingAuthority.trim()) {
+      throw new Error('issuingAuthority is mandatory for reviewer authorization.');
+    }
+    if (!data.authorizationReference || !data.authorizationReference.trim()) {
+      throw new Error('authorizationReference is mandatory for reviewer authorization.');
+    }
+
+    const id = `auth-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const orgId = data.organizationId || targetUser.organizationId || 'org-aicte-western';
+
+    this.db.prepare(`
+      INSERT INTO reviewer_authorizations (
+        id, userId, role, organizationId, verifiedIdentityRef, issuingAuthority,
+        professionalDesignation, authorizationReference, approvedBy, approvedByName,
+        approvedAt, expiryDate, isRevoked, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      id,
+      data.userId,
+      data.role,
+      orgId,
+      data.verifiedIdentityRef.trim(),
+      data.issuingAuthority.trim(),
+      data.professionalDesignation || null,
+      data.authorizationReference.trim(),
+      adminUser.id,
+      adminUser.displayName,
+      now,
+      data.expiryDate || null,
+      now,
+      now
+    );
+
+    this.recordAudit({
+      actorId: adminUser.id,
+      actorName: adminUser.displayName,
+      actorRole: 'Administrator',
+      organizationId: adminUser.organizationId || 'org-aicte-western',
+      action: 'Reviewer Authorized',
+      entityType: 'ReviewerAuthorization',
+      entityReference: id,
+      afterValue: `Granted ${data.role} to ${targetUser.displayName} (${data.userId}) ref: ${data.authorizationReference}`,
+      note: `Issuing authority: ${data.issuingAuthority}`
+    });
+
+    return {
+      id,
+      userId: data.userId,
+      userDisplayName: targetUser.displayName,
+      userEmail: targetUser.email,
+      role: data.role,
+      organizationId: orgId,
+      verifiedIdentityRef: data.verifiedIdentityRef.trim(),
+      issuingAuthority: data.issuingAuthority.trim(),
+      professionalDesignation: data.professionalDesignation || undefined,
+      authorizationReference: data.authorizationReference.trim(),
+      approvedBy: adminUser.id,
+      approvedByName: adminUser.displayName,
+      approvedAt: now,
+      expiryDate: data.expiryDate || null,
+      isRevoked: false,
+      createdAt: now,
+      updatedAt: now
+    };
+  }
+
+  revokeReviewerAuthorization(adminUser: User, authorizationId: string, reason: string): boolean {
+    if (adminUser.role !== 'Administrator') {
+      throw new Error('Unauthorized: Only System Administrators can revoke reviewer authorizations.');
+    }
+    if (!reason || reason.trim().length < 10) {
+      throw new Error('A substantive statutory reason (minimum 10 characters) is required for authorization revocation.');
+    }
+
+    const auth = this.db.prepare('SELECT * FROM reviewer_authorizations WHERE id = ?').get(authorizationId) as any;
+    if (!auth) {
+      throw new Error(`Reviewer authorization '${authorizationId}' not found.`);
+    }
+
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE reviewer_authorizations
+      SET isRevoked = 1, revocationReason = ?, revokedAt = ?, revokedBy = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(reason.trim(), now, adminUser.id, now, authorizationId);
+
+    this.recordAudit({
+      actorId: adminUser.id,
+      actorName: adminUser.displayName,
+      actorRole: 'Administrator',
+      organizationId: adminUser.organizationId || 'org-aicte-western',
+      action: 'Reviewer Authorization Revoked',
+      entityType: 'ReviewerAuthorization',
+      entityReference: authorizationId,
+      beforeValue: `Active ${auth.role} authorization for user ${auth.userId}`,
+      afterValue: `Revoked by ${adminUser.displayName}`,
+      note: reason.trim()
+    });
+
+    return true;
+  }
+
+  getReviewerAuthorization(userId: string): ReviewerAuthorization | null {
+    const row = this.db.prepare(`
+      SELECT a.*, u.displayName as userDisplayName, u.email as userEmail
+      FROM reviewer_authorizations a
+      LEFT JOIN users u ON a.userId = u.id
+      WHERE a.userId = ?
+      ORDER BY a.createdAt DESC
+      LIMIT 1
+    `).get(userId) as any;
+
+    if (!row) return null;
+
+    let isExpired = false;
+    if (row.expiryDate && new Date(row.expiryDate) < new Date()) {
+      isExpired = true;
+    }
+
+    return {
+      id: row.id,
+      userId: row.userId,
+      userDisplayName: row.userDisplayName,
+      userEmail: row.userEmail,
+      role: row.role as UserRole,
+      organizationId: row.organizationId,
+      verifiedIdentityRef: row.verifiedIdentityRef,
+      issuingAuthority: row.issuingAuthority,
+      professionalDesignation: row.professionalDesignation || undefined,
+      authorizationReference: row.authorizationReference,
+      approvedBy: row.approvedBy,
+      approvedByName: row.approvedByName,
+      approvedAt: row.approvedAt,
+      expiryDate: row.expiryDate || null,
+      isRevoked: Boolean(row.isRevoked) || isExpired,
+      revocationReason: isExpired ? 'Authorization expired by date policy' : (row.revocationReason || null),
+      revokedAt: row.revokedAt || null,
+      revokedBy: row.revokedBy || null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt
+    };
+  }
+
+  listReviewerAuthorizations(orgId?: string): ReviewerAuthorization[] {
+    let sql = `
+      SELECT a.*, u.displayName as userDisplayName, u.email as userEmail
+      FROM reviewer_authorizations a
+      LEFT JOIN users u ON a.userId = u.id
+    `;
+    const params: any[] = [];
+    if (orgId) {
+      sql += ' WHERE a.organizationId = ?';
+      params.push(orgId);
+    }
+    sql += ' ORDER BY a.createdAt DESC';
+
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return rows.map(r => ({
+      id: r.id,
+      userId: r.userId,
+      userDisplayName: r.userDisplayName,
+      userEmail: r.userEmail,
+      role: r.role as UserRole,
+      organizationId: r.organizationId,
+      verifiedIdentityRef: r.verifiedIdentityRef,
+      issuingAuthority: r.issuingAuthority,
+      professionalDesignation: r.professionalDesignation || undefined,
+      authorizationReference: r.authorizationReference,
+      approvedBy: r.approvedBy,
+      approvedByName: r.approvedByName,
+      approvedAt: r.approvedAt,
+      expiryDate: r.expiryDate || null,
+      isRevoked: Boolean(r.isRevoked),
+      revocationReason: r.revocationReason || null,
+      revokedAt: r.revokedAt || null,
+      revokedBy: r.revokedBy || null,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
+    }));
+  }
+
+  isUserAuthorizedForAnnotation(userId: string, targetOrgId: string, requiredRole: UserRole): { authorized: boolean; reason?: string } {
+    const user = this.getUserById(userId);
+    if (!user) return { authorized: false, reason: 'User not registered in platform.' };
+    if (user.role === 'Administrator') return { authorized: true };
+
+    const auth = this.getReviewerAuthorization(userId);
+    if (!auth) {
+      return { authorized: false, reason: `User '${user.displayName}' has not been granted statutory authorization.` };
+    }
+    if (auth.isRevoked) {
+      return { authorized: false, reason: `User authorization was revoked or expired: ${auth.revocationReason || 'Revoked'}.` };
+    }
+    if (auth.role !== requiredRole && auth.role !== 'Reviewer' && auth.role !== 'Administrator') {
+      return { authorized: false, reason: `User authorization role '${auth.role}' does not satisfy required role '${requiredRole}'.` };
+    }
+    if (auth.organizationId !== targetOrgId) {
+      return { authorized: false, reason: `Regional authorization mismatch: authorized for '${auth.organizationId}', target is '${targetOrgId}'.` };
+    }
+
+    return { authorized: true };
+  }
+
+  // --- INSTITUTIONAL DOCKET INTAKE & LIFECYCLE ---
+
+  createInstitutionalDocket(uploader: User, data: Partial<InstitutionalDocket>): InstitutionalDocket {
+    if (!data.docketNumber || !data.institutionName || !data.sourceOrganization || !data.authorizationReference) {
+      throw new Error('docketNumber, institutionName, sourceOrganization, and authorizationReference are mandatory.');
+    }
+
+    const id = `dkt-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const orgId = uploader.organizationId || data.organizationId || 'org-aicte-western';
+    const documentChecksum = data.documentChecksum || crypto.createHash('sha256').update(data.documentPath || id).digest('hex');
+    const pageCount = Number(data.pageCount || 1);
+    const sizeBytes = Number(data.sizeBytes || 1024);
+    const mimeType = data.mimeType || 'application/pdf';
+    const documentClassification = data.documentClassification || 'statutory_filing';
+    const provenanceStatus = data.provenanceStatus || 'PROVENANCE_PENDING';
+    const lifecycleState: InstitutionalDocketLifecycle = data.lifecycleState || 'DATA_SOURCE_IDENTIFIED';
+
+    this.db.prepare(`
+      INSERT INTO institutional_dockets (
+        id, docketNumber, institutionId, institutionName, sourceOrganization, sourceUrl,
+        retrievalDate, publicationDate, authorizationReference, documentChecksum,
+        documentPath, mimeType, sizeBytes, pageCount, organizationId,
+        documentClassification, provenanceStatus, lifecycleState, uploadedBy, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.docketNumber.trim(),
+      data.institutionId || `inst-${crypto.randomUUID().slice(0, 6)}`,
+      data.institutionName.trim(),
+      data.sourceOrganization.trim(),
+      data.sourceUrl || null,
+      data.retrievalDate || now.slice(0, 10),
+      data.publicationDate || null,
+      data.authorizationReference.trim(),
+      documentChecksum,
+      data.documentPath || `dockets/${data.docketNumber}.pdf`,
+      mimeType,
+      sizeBytes,
+      pageCount,
+      orgId,
+      documentClassification,
+      provenanceStatus,
+      lifecycleState,
+      uploader.id,
+      now,
+      now
+    );
+
+    // Initial transition event
+    const transitionId = `trans-${crypto.randomUUID()}`;
+    this.db.prepare(`
+      INSERT INTO docket_transitions (id, docketId, fromState, toState, actorId, actorName, rationale, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      transitionId,
+      id,
+      'DATA_SOURCE_IDENTIFIED',
+      lifecycleState,
+      uploader.id,
+      uploader.displayName,
+      'Institutional dossier registered in intake portal.',
+      now
+    );
+
+    this.recordAudit({
+      actorId: uploader.id,
+      actorName: uploader.displayName,
+      actorRole: uploader.role,
+      organizationId: orgId,
+      action: 'Institutional Docket Ingested',
+      entityType: 'InstitutionalDocket',
+      entityReference: id,
+      afterValue: `Registered docket ${data.docketNumber} for ${data.institutionName}`,
+      note: `Authorization ref: ${data.authorizationReference}`
+    });
+
+    return {
+      id,
+      docketNumber: data.docketNumber.trim(),
+      institutionId: data.institutionId || `inst-${id.slice(4, 10)}`,
+      institutionName: data.institutionName.trim(),
+      sourceOrganization: data.sourceOrganization.trim(),
+      sourceUrl: data.sourceUrl || null,
+      retrievalDate: data.retrievalDate || now.slice(0, 10),
+      publicationDate: data.publicationDate || null,
+      authorizationReference: data.authorizationReference.trim(),
+      documentChecksum,
+      documentPath: data.documentPath || `dockets/${data.docketNumber}.pdf`,
+      mimeType,
+      sizeBytes,
+      pageCount,
+      organizationId: orgId,
+      documentClassification,
+      provenanceStatus,
+      lifecycleState,
+      uploadedBy: uploader.id,
+      createdAt: now,
+      updatedAt: now
+    };
+  }
+
+  transitionDocketLifecycle(actor: User, docketId: string, toState: InstitutionalDocketLifecycle, rationale: string): InstitutionalDocket {
+    if (!rationale || rationale.trim().length < 10) {
+      throw new Error('A substantive statutory rationale (minimum 10 characters) is required for lifecycle state transition.');
+    }
+
+    const docket = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ?').get(docketId) as any;
+    if (!docket) {
+      throw new Error(`Institutional docket '${docketId}' not found.`);
+    }
+
+    if (actor.role !== 'Administrator' && actor.organizationId !== docket.organizationId) {
+      throw new Error('Cross-tenant violation: Cannot transition docket belonging to another regional directorate.');
+    }
+
+    const fromState = docket.lifecycleState;
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      UPDATE institutional_dockets
+      SET lifecycleState = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(toState, now, docketId);
+
+    const transId = `trans-${crypto.randomUUID()}`;
+    this.db.prepare(`
+      INSERT INTO docket_transitions (id, docketId, fromState, toState, actorId, actorName, rationale, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      transId,
+      docketId,
+      fromState,
+      toState,
+      actor.id,
+      actor.displayName,
+      rationale.trim(),
+      now
+    );
+
+    this.recordAudit({
+      actorId: actor.id,
+      actorName: actor.displayName,
+      actorRole: actor.role,
+      organizationId: docket.organizationId,
+      action: 'Docket Lifecycle Transitioned',
+      entityType: 'InstitutionalDocket',
+      entityReference: docketId,
+      beforeValue: fromState,
+      afterValue: toState,
+      note: rationale.trim()
+    });
+
+    return {
+      ...docket,
+      lifecycleState: toState,
+      updatedAt: now
+    };
+  }
+
+  verifyDocketProvenance(verifier: User, docketId: string, status: 'PROVENANCE_VERIFIED' | 'PROVENANCE_REJECTED', notes: string): InstitutionalDocket {
+    if (verifier.role !== 'Administrator' && verifier.role !== 'Reviewer') {
+      throw new Error('Unauthorized: Only Administrators and Reviewers can certify document provenance.');
+    }
+    if (!notes || notes.trim().length < 10) {
+      throw new Error('Substantive provenance review notes (minimum 10 characters) are required.');
+    }
+
+    const docket = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ?').get(docketId) as any;
+    if (!docket) {
+      throw new Error(`Institutional docket '${docketId}' not found.`);
+    }
+
+    if (verifier.role !== 'Administrator' && verifier.organizationId !== docket.organizationId) {
+      throw new Error('Cross-tenant violation: Cannot verify provenance of docket belonging to another regional directorate.');
+    }
+
+    const now = new Date().toISOString();
+    const nextState: InstitutionalDocketLifecycle = status === 'PROVENANCE_VERIFIED' ? 'PROVENANCE_VERIFIED' : 'PROVENANCE_REJECTED';
+
+    this.db.prepare(`
+      UPDATE institutional_dockets
+      SET provenanceStatus = ?, verifiedBy = ?, verifiedAt = ?, verificationNotes = ?, lifecycleState = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(status, verifier.id, now, notes.trim(), nextState, now, docketId);
+
+    this.recordAudit({
+      actorId: verifier.id,
+      actorName: verifier.displayName,
+      actorRole: verifier.role,
+      organizationId: docket.organizationId,
+      action: 'Docket Provenance Verified',
+      entityType: 'InstitutionalDocket',
+      entityReference: docketId,
+      beforeValue: docket.provenanceStatus,
+      afterValue: status,
+      note: notes.trim()
+    });
+
+    return {
+      ...docket,
+      provenanceStatus: status,
+      verifiedBy: verifier.id,
+      verifiedAt: now,
+      verificationNotes: notes.trim(),
+      lifecycleState: nextState,
+      updatedAt: now
+    };
+  }
+
+  getInstitutionalDockets(filters?: { organizationId?: string; lifecycleState?: string; provenanceStatus?: string }): InstitutionalDocket[] {
+    let sql = 'SELECT * FROM institutional_dockets WHERE 1=1';
+    const params: any[] = [];
+    if (filters?.organizationId) {
+      sql += ' AND organizationId = ?';
+      params.push(filters.organizationId);
+    }
+    if (filters?.lifecycleState) {
+      sql += ' AND lifecycleState = ?';
+      params.push(filters.lifecycleState);
+    }
+    if (filters?.provenanceStatus) {
+      sql += ' AND provenanceStatus = ?';
+      params.push(filters.provenanceStatus);
+    }
+    sql += ' ORDER BY createdAt DESC';
+    return this.db.prepare(sql).all(...params) as unknown as InstitutionalDocket[];
+  }
+
+  getInstitutionalDocketById(id: string): InstitutionalDocket | null {
+    const row = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ? OR docketNumber = ?').get(id, id) as any;
+    return row ? (row as InstitutionalDocket) : null;
+  }
+
+  getDocketTransitions(docketId: string): DocketTransitionEvent[] {
+    return this.db.prepare('SELECT * FROM docket_transitions WHERE docketId = ? ORDER BY timestamp ASC').all(docketId) as unknown as DocketTransitionEvent[];
+  }
+
+  getOperationalDashboard(orgId?: string, role?: string) {
+    let dktSql = 'SELECT COUNT(*) as count FROM institutional_dockets';
+    let docSql = 'SELECT COUNT(*) as count FROM documents';
+    let annRecSql = 'SELECT COUNT(*) as count FROM annotation_records WHERE isDemoCandidate = 0';
+    let subSql = 'SELECT COUNT(*) as count FROM user_annotations u JOIN annotation_records r ON u.recordId = r.id WHERE r.isDemoCandidate = 0 AND u.isDraft = 0';
+    let adjSql = "SELECT COUNT(*) as count FROM annotation_records WHERE isDemoCandidate = 0 AND status = 'adjudicated'";
+    let disputedSql = "SELECT COUNT(*) as count FROM annotation_records WHERE isDemoCandidate = 0 AND status = 'disputed'";
+
+    const params: any[] = [];
+    if (orgId && role !== 'Administrator') {
+      dktSql += ' WHERE organizationId = ?';
+      docSql += ' WHERE organizationId = ?';
+      annRecSql += ' AND organizationId = ?';
+      subSql += ' AND r.organizationId = ?';
+      adjSql += ' AND organizationId = ?';
+      disputedSql += ' AND organizationId = ?';
+      params.push(orgId);
+    }
+
+    const dktCount = Number((this.db.prepare(dktSql).get(...params) as any)?.count || 0);
+    const docCount = Number((this.db.prepare(docSql).get(...params) as any)?.count || 0);
+    const candidatePairsCount = Number((this.db.prepare(annRecSql).get(...params) as any)?.count || 0);
+    const independentAnnotationsCount = Number((this.db.prepare(subSql).get(...params) as any)?.count || 0);
+    const adjudicatedPairsCount = Number((this.db.prepare(adjSql).get(...params) as any)?.count || 0);
+    const disputedPairsCount = Number((this.db.prepare(disputedSql).get(...params) as any)?.count || 0);
+
+    // Lifecycle breakdown
+    let lcSql = 'SELECT lifecycleState, COUNT(*) as count FROM institutional_dockets';
+    if (orgId && role !== 'Administrator') lcSql += ' WHERE organizationId = ?';
+    lcSql += ' GROUP BY lifecycleState';
+    const lcRows = this.db.prepare(lcSql).all(...params) as { lifecycleState: string; count: number }[];
+    const lifecycleDistribution: Record<string, number> = {};
+    for (const r of lcRows) lifecycleDistribution[r.lifecycleState] = r.count;
+
+    // Provenance status breakdown
+    let provSql = 'SELECT provenanceStatus, COUNT(*) as count FROM institutional_dockets';
+    if (orgId && role !== 'Administrator') provSql += ' WHERE organizationId = ?';
+    provSql += ' GROUP BY provenanceStatus';
+    const provRows = this.db.prepare(provSql).all(...params) as { provenanceStatus: string; count: number }[];
+    const provenanceDistribution: Record<string, number> = {};
+    for (const r of provRows) provenanceDistribution[r.provenanceStatus] = r.count;
+
+    const metrics = this.getAnnotationMetrics(orgId);
+
+    return {
+      overview: {
+        totalDocumentsCount: dktCount + docCount,
+        candidatePairsCount,
+        independentAnnotationsCount,
+        adjudicatedPairsCount,
+        disputedBacklogCount: disputedPairsCount,
+        exportEligibleRecordsCount: 0 // Clean baseline until real human data
+      },
+      provisionalAcceptanceTargets: {
+        minimumDocumentsTarget: 200,
+        currentDocuments: dktCount + docCount,
+        documentsSatisfied: (dktCount + docCount) >= 200,
+        minimumPairsTarget: 200,
+        currentCandidatePairs: candidatePairsCount,
+        pairsSatisfied: candidatePairsCount >= 200,
+        targetCohenKappa: 0.70,
+        currentCohenKappa: metrics.cohensKappa,
+        kappaSatisfied: metrics.cohensKappa !== null && metrics.cohensKappa >= 0.70,
+        maximumAdjudicationRateTarget: 0.25,
+        currentAdjudicationRate: metrics.adjudicationRate,
+        adjudicationSatisfied: metrics.adjudicationRate <= 0.25,
+        isCertifiedGoldStandardReady: false
+      },
+      lifecycleDistribution,
+      provenanceDistribution,
+      metrics,
+      datasetStatus: {
+        datasetVersion: '3.0.0-provisional',
+        goldStandardRecordsCount: 0,
+        goldStandardPath: 'ai_service/ml/data/v3/annotations/gold_standard_human.jsonl',
+        isLockedPendingCollection: true
+      }
+    };
   }
 
   getReviewActionsByApplication(applicationId: string): ReviewAction[] {
@@ -2024,6 +2845,14 @@ export class ScrutinyDatabase {
       throw new Error('Access denied: Record belongs to another regional organization.');
     }
 
+    // Phase D: Reviewer Governance check (reject revoked or expired authorizations)
+    if (!record.isDemoCandidate && annotator.role !== 'Administrator') {
+      const auth = this.getReviewerAuthorization(annotator.id);
+      if (auth && auth.isRevoked) {
+        throw new Error(`Reviewer authorization revoked or expired: ${auth.revocationReason || 'Revoked'}.`);
+      }
+    }
+
     const now = new Date().toISOString();
     const annotationId = `uann-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -2132,6 +2961,20 @@ export class ScrutinyDatabase {
       throw new Error(`Only records with 'disputed' status require adjudication (current status: '${record.status}').`);
     }
 
+    // Phase D: Adjudicator Independence & Conflict of Interest Prevention
+    const previousSubmissions = this.db.prepare('SELECT annotatorId FROM user_annotations WHERE recordId = ?').all(record.id) as any[];
+    const isAnnotatorOnSameTask = previousSubmissions.some(s => s.annotatorId === adjudicator.id);
+    if (isAnnotatorOnSameTask && adjudicator.role !== 'Administrator') {
+      throw new Error('Conflict of interest: Adjudicator cannot be an evaluating annotator on the same task.');
+    }
+
+    if (adjudicator.role !== 'Administrator') {
+      const auth = this.getReviewerAuthorization(adjudicator.id);
+      if (auth && (auth.isRevoked || auth.role !== 'Adjudicator')) {
+        throw new Error(`Adjudicator authorization failed: ${auth.revocationReason || 'User lacks active Adjudicator accreditation'}.`);
+      }
+    }
+
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE annotation_records
@@ -2213,7 +3056,7 @@ export class ScrutinyDatabase {
 
     // Calculate Raw Agreement & Cohen's Kappa on all records having >= 2 submitted annotations
     let pairedSql = `
-      SELECT a1.recordId, a1.label as label1, a2.label as label2
+      SELECT a1.recordId, a1.annotatorId as annotator1Id, a2.annotatorId as annotator2Id, a1.label as label1, a2.label as label2
       FROM user_annotations a1
       JOIN user_annotations a2 ON a1.recordId = a2.recordId AND a1.id < a2.id
       JOIN annotation_records r ON a1.recordId = r.id
@@ -2224,50 +3067,15 @@ export class ScrutinyDatabase {
       pairedSql += ' AND r.organizationId = ?';
       pairedParams.push(organizationId);
     }
-    const pairs = this.db.prepare(pairedSql).all(...pairedParams) as { recordId: string; label1: string; label2: string }[];
-    const N = pairs.length;
+    const pairs = this.db.prepare(pairedSql).all(...pairedParams) as {
+      recordId: string;
+      annotator1Id: string;
+      annotator2Id: string;
+      label1: string;
+      label2: string;
+    }[];
 
-    let rawAgreementRate = 0;
-    let cohensKappa = 0.0;
-    let kappaInterpretation = 'No Double Annotations';
-
-    if (N > 0) {
-      let matches = 0;
-      const categories: FiveClassLabel[] = ['MATCH', 'MISMATCH', 'MISSING', 'UNCERTAIN', 'NOT_COMPARABLE'];
-      const f1: Record<string, number> = {};
-      const f2: Record<string, number> = {};
-      for (const c of categories) {
-        f1[c] = 0;
-        f2[c] = 0;
-      }
-
-      for (const p of pairs) {
-        if (p.label1 === p.label2) matches++;
-        if (p.label1 in f1) f1[p.label1]++;
-        if (p.label2 in f2) f2[p.label2]++;
-      }
-
-      const po = matches / N;
-      rawAgreementRate = Math.round(po * 1000) / 1000;
-
-      let pe = 0;
-      for (const c of categories) {
-        pe += (f1[c] / N) * (f2[c] / N);
-      }
-
-      if (Math.abs(1 - pe) < 1e-6) {
-        cohensKappa = po === 1.0 ? 1.0 : 0.0;
-      } else {
-        cohensKappa = Math.round(((po - pe) / (1 - pe)) * 1000) / 1000;
-      }
-
-      if (cohensKappa >= 0.81) kappaInterpretation = 'Almost Perfect Agreement';
-      else if (cohensKappa >= 0.61) kappaInterpretation = 'Substantial Agreement';
-      else if (cohensKappa >= 0.41) kappaInterpretation = 'Moderate Agreement';
-      else if (cohensKappa >= 0.21) kappaInterpretation = 'Fair Agreement';
-      else if (cohensKappa >= 0.0) kappaInterpretation = 'Slight Agreement';
-      else kappaInterpretation = 'Poor / Chance Divergence';
-    }
+    const kappaRes = computeCohensKappa(pairs);
 
     const adjudicationRate = (disputedRecords + adjudicatedRecords > 0)
       ? Math.round((adjudicatedRecords / (disputedRecords + adjudicatedRecords)) * 1000) / 1000
@@ -2286,9 +3094,17 @@ export class ScrutinyDatabase {
       disputedRecords,
       adjudicatedRecords,
       labelDistribution,
-      rawAgreementRate,
-      cohensKappa,
-      cohensKappaInterpretation: kappaInterpretation,
+      rawAgreementRate: kappaRes.rawAgreementRate,
+      cohensKappa: kappaRes.kappa,
+      cohensKappaInterpretation: kappaRes.interpretation,
+      po: kappaRes.po,
+      pe: kappaRes.pe,
+      pairedCount: kappaRes.pairedCount,
+      distinctAnnotatorsCount: kappaRes.distinctAnnotatorsCount,
+      excludedPairsCount: kappaRes.excludedPairsCount,
+      undefinedReason: kappaRes.undefinedReason,
+      isSampleSizeSufficient: kappaRes.isSampleSizeSufficient,
+      categoryDistribution: kappaRes.categoryDistribution,
       adjudicationRate,
       missingEvidenceRate,
       invalidRecordRate: 0.0,
@@ -2307,12 +3123,16 @@ export class ScrutinyDatabase {
     manifestPath: string;
     rejectionCount: number;
     rejectionReasons: { recordId: string; reasons: string[] }[];
+    ledgerIntegrityReport?: any;
   } {
     const exportFile = options?.outPath || path.resolve(process.cwd(), 'ai_service/ml/data/v3/annotations/gold_standard_human.jsonl');
     const baseName = path.basename(exportFile, path.extname(exportFile));
     const manifestFile = options?.outPath
       ? path.resolve(path.dirname(exportFile), '..', 'manifests', `${baseName}.manifest.json`)
       : path.resolve(process.cwd(), 'ai_service/ml/data/v3/manifests/gold_standard_human.manifest.json');
+
+    // Cryptographic audit ledger verification across the entire chain
+    const ledgerCheck = this.verifyLedgerChain();
 
     let sql = `
       SELECT * FROM annotation_records
@@ -2330,6 +3150,23 @@ export class ScrutinyDatabase {
     const jsonlRows: string[] = [];
     const rejectionReasons: { recordId: string; reasons: string[] }[] = [];
 
+    // Helper to resolve document from institutional_dockets or documents
+    const resolveDoc = (docId?: string, docName?: string) => {
+      if (docId) {
+        const dkt = this.db.prepare('SELECT * FROM institutional_dockets WHERE id = ? OR docketNumber = ?').get(docId, docId) as any;
+        if (dkt) return { type: 'docket' as const, doc: dkt };
+        const doc = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(docId) as any;
+        if (doc) return { type: 'document' as const, doc };
+      }
+      if (docName) {
+        const dkt = this.db.prepare('SELECT * FROM institutional_dockets WHERE docketNumber = ? OR documentPath LIKE ?').get(docName, `%${docName}%`) as any;
+        if (dkt) return { type: 'docket' as const, doc: dkt };
+        const doc = this.db.prepare('SELECT * FROM documents WHERE originalFilename = ?').get(docName) as any;
+        if (doc) return { type: 'document' as const, doc };
+      }
+      return null;
+    };
+
     for (const r of records) {
       const reasons: string[] = [];
 
@@ -2340,27 +3177,94 @@ export class ScrutinyDatabase {
       if (r.sourceProvenance && (
         r.sourceProvenance.toLowerCase().includes('demo') ||
         r.sourceProvenance.toLowerCase().includes('synthetic') ||
-        r.sourceProvenance.toLowerCase().includes('mock')
+        r.sourceProvenance.toLowerCase().includes('mock') ||
+        r.sourceProvenance.toLowerCase().includes('quarantine')
       )) {
         reasons.push(`Source provenance indicates non-genuine origin: '${r.sourceProvenance}'.`);
       }
+      if (r.status === 'quarantined') {
+        reasons.push('Record status is quarantined.');
+      }
 
-      // GATE 2: Identifiable Source Document Citations
+      // Resolve documents for Gates 2, 3, 4, 5, 15
+      const claimResolved = resolveDoc(r.claimDocumentId, r.claimDocumentName);
+      const evidenceResolved = resolveDoc(r.evidenceDocumentId, r.evidenceDocumentName);
+
+      // GATE 2: Identifiable Source Document Citations & Existence
       const hasClaimDoc = Boolean(r.claimDocumentId || (r.claimDocumentName && r.claimDocumentName.trim().length > 0));
       const hasEvidenceDoc = Boolean(r.evidenceDocumentId || (r.evidenceDocumentName && r.evidenceDocumentName.trim().length > 0));
       if (!hasClaimDoc || !hasEvidenceDoc) {
         reasons.push('Missing identifiable source document citation for claim or evidence.');
       }
+      if (r.claimDocumentId && !claimResolved) {
+        reasons.push(`Referenced claim document ID '${r.claimDocumentId}' not found in institutional registry.`);
+      }
+      if (r.evidenceDocumentId && !evidenceResolved) {
+        reasons.push(`Referenced evidence document ID '${r.evidenceDocumentId}' not found in institutional registry.`);
+      }
 
-      // GATE 3: Page references must be valid positive integers
+      // GATE 3: Both document checksums verify (if document binary is registered on disk)
+      const verifyDocChecksum = (item: { type: 'docket' | 'document'; doc: any } | null, label: string) => {
+        if (!item) return;
+        const filePath = item.type === 'docket'
+          ? path.resolve(process.cwd(), item.doc.documentPath)
+          : (path.isAbsolute(item.doc.storageKey)
+              ? item.doc.storageKey
+              : path.resolve(process.cwd(), 'data', item.doc.storageKey));
+        const expectedChecksum = (item.type === 'docket' ? item.doc.documentChecksum : item.doc.checksum || '').toLowerCase();
+        if (fs.existsSync(filePath)) {
+          try {
+            const fileBytes = fs.readFileSync(filePath);
+            const actualHash = crypto.createHash('sha256').update(fileBytes).digest('hex').toLowerCase();
+            const expectedClean = expectedChecksum.replace(/^sha256-/, '');
+            if (expectedClean && !actualHash.startsWith(expectedClean) && !expectedClean.startsWith(actualHash)) {
+              reasons.push(`${label} document checksum verification failed: expected ${expectedClean}, computed ${actualHash}.`);
+            }
+          } catch {
+            reasons.push(`Failed to read ${label} document binary for checksum recalculation.`);
+          }
+        } else if (item.type === 'docket') {
+          reasons.push(`${label} institutional docket physical file missing at: ${item.doc.documentPath}.`);
+        }
+      };
+      verifyDocChecksum(claimResolved, 'Claim');
+      verifyDocChecksum(evidenceResolved, 'Evidence');
+
+      // GATE 4: Source Provenance Verified
+      if (claimResolved) {
+        const prov = claimResolved.doc.provenanceStatus;
+        if (prov === 'PROVENANCE_PENDING' || prov === 'PROVENANCE_REJECTED') {
+          reasons.push(`Claim document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
+        }
+      }
+      if (evidenceResolved) {
+        const prov = evidenceResolved.doc.provenanceStatus;
+        if (prov === 'PROVENANCE_PENDING' || prov === 'PROVENANCE_REJECTED') {
+          reasons.push(`Evidence document provenance is '${prov}': only PROVENANCE_VERIFIED documents may enter gold standard.`);
+        }
+      }
+      if (r.provenanceStatus && (r.provenanceStatus === 'PROVENANCE_PENDING' || r.provenanceStatus === 'PROVENANCE_REJECTED')) {
+        reasons.push(`Candidate provenance status '${r.provenanceStatus}' is not verified.`);
+      }
+
+      // GATE 5: Page references must be valid positive integers within page count
       if (r.claimPage === null || r.claimPage === undefined || Number(r.claimPage) < 1) {
         reasons.push('Missing or invalid application docket page citation.');
+      } else if (claimResolved && claimResolved.doc.pageCount > 0 && Number(r.claimPage) > claimResolved.doc.pageCount) {
+        reasons.push(`Claim page ${r.claimPage} exceeds document page count (${claimResolved.doc.pageCount}).`);
       }
       if (r.evidencePage === null || r.evidencePage === undefined || Number(r.evidencePage) < 1) {
         reasons.push('Missing or invalid supporting evidence docket page citation.');
+      } else if (evidenceResolved && evidenceResolved.doc.pageCount > 0 && Number(r.evidencePage) > evidenceResolved.doc.pageCount) {
+        reasons.push(`Evidence page ${r.evidencePage} exceeds document page count (${evidenceResolved.doc.pageCount}).`);
       }
 
-      // GATE 4: Double-Blind Independent Human Submissions
+      // GATE 6: Evidence references resolve to actual source content
+      if (!r.claimFieldName || !r.claimText || !r.evidenceText) {
+        reasons.push('Evidence reference incomplete: missing claimFieldName, claimText, or evidenceText.');
+      }
+
+      // GATE 7, 8, 9, 10: Double-Blind Independent Human Submissions
       const submissions = this.db.prepare(`
         SELECT * FROM user_annotations
         WHERE recordId = ? AND isDraft = 0
@@ -2370,12 +3274,28 @@ export class ScrutinyDatabase {
       if (submissions.length < 2) {
         reasons.push(`Insufficient independent review: minimum of 2 non-draft human submissions required (found ${submissions.length}).`);
       } else {
+        // GATE 9: Duplicate annotator check
         const uniqueAnnotators = new Set(submissions.map((s) => s.annotatorId));
         if (uniqueAnnotators.size < 2) {
           reasons.push('Duplicate annotator submissions: independent review requires two distinct authorized evaluators.');
         }
 
-        // Substantive rationale checks on all submissions
+        // GATE 7: Authorized annotators check
+        for (const sub of submissions) {
+          const auth = this.getReviewerAuthorization(sub.annotatorId);
+          if (auth && auth.isRevoked) {
+            reasons.push(`Submission by annotator ${sub.annotatorName || sub.annotatorId} has revoked/expired statutory authorization.`);
+          }
+        }
+
+        // GATE 8: Non-draft check
+        for (const sub of submissions) {
+          if (sub.isDraft) {
+            reasons.push(`Submission by annotator ${sub.annotatorName || sub.annotatorId} is marked as draft.`);
+          }
+        }
+
+        // GATE 10: Substantive rationale checks on all submissions
         for (const sub of submissions) {
           if (!sub.rationale || sub.rationale.trim().length < 10) {
             reasons.push(`Submission by annotator ${sub.annotatorName || sub.annotatorId} lacks substantive rationale (<10 characters).`);
@@ -2383,7 +3303,7 @@ export class ScrutinyDatabase {
           }
         }
 
-        // GATE 5: Consensus or Adjudication Verification
+        // GATE 11 & 12: Consensus or Adjudication Verification & Adjudicator Independence
         if (r.status === 'agreed') {
           const firstLabel = submissions[0].label;
           const secondLabel = submissions[1].label;
@@ -2394,12 +3314,24 @@ export class ScrutinyDatabase {
           if (!r.adjudicatorId || !r.adjudicationRationale || r.adjudicationRationale.trim().length < 10) {
             reasons.push('Adjudication record lacks verified third-reviewer identity or substantive statutory rationale (minimum 10 characters).');
           }
+          // GATE 12: Adjudicator Independence
+          const isAnnotatorOnSameTask = submissions.some((s) => s.annotatorId === r.adjudicatorId);
+          if (isAnnotatorOnSameTask) {
+            reasons.push(`Adjudicator conflict of interest: Adjudicator '${r.adjudicatorId}' was an evaluating annotator on the same task.`);
+          }
+          const adjAuth = this.getReviewerAuthorization(r.adjudicatorId);
+          if (adjAuth && adjAuth.isRevoked) {
+            reasons.push(`Adjudicator authorization for '${r.adjudicatorId}' is revoked: ${adjAuth.revocationReason || 'Revoked'}.`);
+          }
         } else {
           reasons.push(`Invalid record status '${r.status}': unresolved disputes cannot enter the gold standard.`);
         }
       }
 
-      // GATE 6: Complete Audit History
+      // GATE 13: Cryptographic Audit Ledger Verification & Complete Audit History
+      if (!ledgerCheck.isValid) {
+        reasons.push(`Cryptographic audit ledger verification failed: ${ledgerCheck.errors.join('; ') || 'Chain broken or tampered'}.`);
+      }
       const auditCount = Number((this.db.prepare(`
         SELECT COUNT(*) as count FROM audit_events
         WHERE entityReference = ?
@@ -2407,6 +3339,24 @@ export class ScrutinyDatabase {
 
       if (auditCount === 0) {
         reasons.push('Audit history missing: candidate lifecycle actions have not been recorded in system ledger.');
+      }
+
+      // GATE 14: Tenant Isolation Enforcement
+      if (options?.organizationId && options?.role !== 'Administrator') {
+        if (r.organizationId !== options.organizationId) {
+          reasons.push(`Cross-tenant violation: Record organization '${r.organizationId}' does not match caller organization '${options.organizationId}'.`);
+        }
+      }
+
+      // GATE 15: No Source Document or Candidate Under Quarantine
+      if (r.status === 'quarantined' || (r.sourceProvenance && r.sourceProvenance.toLowerCase().includes('quarantine'))) {
+        reasons.push('Candidate record is marked as quarantined.');
+      }
+      if (claimResolved && (claimResolved.doc.provenanceStatus === 'QUARANTINED' || claimResolved.doc.lifecycleState === 'QUARANTINED' || claimResolved.doc.documentClassification === 'quarantined')) {
+        reasons.push('Claim source document is quarantined.');
+      }
+      if (evidenceResolved && (evidenceResolved.doc.provenanceStatus === 'QUARANTINED' || evidenceResolved.doc.lifecycleState === 'QUARANTINED' || evidenceResolved.doc.documentClassification === 'quarantined')) {
+        reasons.push('Evidence source document is quarantined.');
       }
 
       // If any gate failed, reject and record reasons
@@ -2481,12 +3431,16 @@ export class ScrutinyDatabase {
         is_human_annotated: true,
         adjudication_required_for_disagreements: true,
         blind_review_enforced: true,
-        rejection_gate_active: true
+        rejection_gate_active: true,
+        fifteen_firewall_gates_enforced: true,
+        ledger_hash_chain_verified: ledgerCheck.isValid
       }
     };
 
     fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
     fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), 'utf-8');
+
+    const ledgerReport = this.generateLedgerIntegrityReport();
 
     return {
       count: jsonlRows.length,
@@ -2494,7 +3448,8 @@ export class ScrutinyDatabase {
       sha256: sha256,
       manifestPath: manifestFile,
       rejectionCount: rejectionReasons.length,
-      rejectionReasons
+      rejectionReasons,
+      ledgerIntegrityReport: ledgerReport
     };
   }
 

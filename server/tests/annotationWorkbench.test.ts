@@ -442,9 +442,12 @@ async function runAnnotationWorkbenchTests() {
     const m = metricsRes.data.data;
     testAssert(typeof m.totalRecords === 'number' && m.totalRecords >= 7, 'Total records count is valid');
     testAssert(typeof m.rawAgreementRate === 'number', 'Raw agreement rate is computed');
-    testAssert(typeof m.cohensKappa === 'number', "Cohen's Kappa is computed");
+    testAssert(m.cohensKappa === null || typeof m.cohensKappa === 'number', "Cohen's Kappa is computed or explicitly undefined");
     testAssert(typeof m.cohensKappaInterpretation === 'string', "Cohen's Kappa interpretation provided");
-    testAssert(m.cohensKappa !== m.rawAgreementRate || m.totalRecords > 0, "Cohen's Kappa is distinguished from raw agreement");
+    if (m.cohensKappa === null) {
+      testAssert(typeof m.undefinedReason === 'string', "Explicit undefined reason provided when kappa is null");
+    }
+    testAssert(typeof m.rawAgreementRate === 'number', "Raw agreement rate is preserved separately from kappa");
     testAssert(typeof m.adjudicationRate === 'number', 'Adjudication rate is computed');
     testAssert(typeof m.missingEvidenceRate === 'number', 'Missing evidence rate is computed');
     testAssert(m.labelDistribution && typeof m.labelDistribution.MATCH === 'number', 'Label distribution is provided');

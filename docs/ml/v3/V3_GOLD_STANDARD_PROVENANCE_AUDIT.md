@@ -196,3 +196,4 @@ Before `gold_standard_human.jsonl` can receive genuine data:
 
 - Any attempt to train, fine-tune, or calibrate models using synthetic, mock, or test-generated data will result in immediate rejection during release acceptance.
 - The existing V2 calibrated pipeline (`ai_service/ml/artifacts/v2/`) remains the production baseline until V3 is formally established and certified.
+

@@ -196,15 +196,21 @@ export interface ReviewAction {
 
 export interface AuditEvent {
   id: string;
+  sequenceNumber?: number;
   timestamp: string;
   actorId: string;
   actorName: string;
+  actorRole?: string;
+  organizationId?: string;
   action: string;
-  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User' | 'AnnotationRecord' | 'UserAnnotation';
+  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User' | 'AnnotationRecord' | 'UserAnnotation' | 'ReviewerAuthorization' | 'InstitutionalDocket' | 'System';
   entityReference: string;
-  beforeValue?: string;
-  afterValue?: string;
-  note?: string;
+  beforeValue?: string | null;
+  afterValue?: string | null;
+  note?: string | null;
+  payloadHash?: string;
+  previousHash?: string;
+  currentHash?: string;
 }
 
 export type FiveClassLabel = 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE';
@@ -270,8 +276,20 @@ export interface AnnotationMetrics {
   adjudicatedRecords: number;
   labelDistribution: Record<FiveClassLabel, number>;
   rawAgreementRate: number;
-  cohensKappa: number;
+  cohensKappa: number | null;
   cohensKappaInterpretation: string;
+  po: number | null;
+  pe: number | null;
+  pairedCount: number;
+  distinctAnnotatorsCount: number;
+  excludedPairsCount: number;
+  undefinedReason: string | null;
+  isSampleSizeSufficient: boolean;
+  categoryDistribution: Record<FiveClassLabel, {
+    annotator1: number;
+    annotator2: number;
+    total: number;
+  }>;
   adjudicationRate: number;
   missingEvidenceRate: number;
   invalidRecordRate: number;
@@ -297,4 +315,94 @@ export interface ScrutinyReportData {
   validationSummary: ValidationSummary;
   generatedAt: string;
   generatedBy: string;
+}
+
+export interface ReviewerAuthorization {
+  id: string;
+  userId: string;
+  userDisplayName?: string;
+  userEmail?: string;
+  role: UserRole;
+  organizationId: string;
+  verifiedIdentityRef: string;
+  issuingAuthority: string;
+  professionalDesignation?: string;
+  authorizationReference: string;
+  approvedBy: string;
+  approvedByName?: string;
+  approvedAt: string;
+  expiryDate?: string | null;
+  isRevoked: boolean;
+  revocationReason?: string | null;
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewerAuthorizationInput {
+  userId: string;
+  role: UserRole;
+  organizationId: string;
+  verifiedIdentityRef: string;
+  issuingAuthority: string;
+  professionalDesignation?: string;
+  authorizationReference: string;
+  expiryDate?: string;
+}
+
+export type InstitutionalDocketLifecycle =
+  | 'DATA_SOURCE_IDENTIFIED'
+  | 'ACCESS_AUTHORIZATION_PENDING'
+  | 'AUTHORIZED_FOR_COLLECTION'
+  | 'DOCUMENT_INGESTED'
+  | 'PROVENANCE_PENDING'
+  | 'PROVENANCE_VERIFIED'
+  | 'ANNOTATION_READY'
+  | 'DOUBLE_ANNOTATION_IN_PROGRESS'
+  | 'ADJUDICATION_PENDING'
+  | 'ADJUDICATED'
+  | 'EXPORT_ELIGIBLE'
+  | 'ACCESS_DENIED'
+  | 'PROVENANCE_REJECTED'
+  | 'DEMO_FIXTURE'
+  | 'SYNTHETIC_DATA'
+  | 'QUARANTINED';
+
+export interface InstitutionalDocket {
+  id: string;
+  docketNumber: string;
+  institutionId: string;
+  institutionName: string;
+  sourceOrganization: string;
+  sourceUrl?: string | null;
+  retrievalDate: string;
+  publicationDate?: string | null;
+  authorizationReference: string;
+  documentChecksum: string;
+  documentPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  pageCount: number;
+  organizationId: string;
+  documentClassification: 'statutory_filing' | 'inspection_report' | 'tribunal_order' | 'public_disclosure' | 'demo_fixture';
+  provenanceStatus: 'PROVENANCE_PENDING' | 'PROVENANCE_VERIFIED' | 'PROVENANCE_REJECTED';
+  lifecycleState: InstitutionalDocketLifecycle;
+  verifiedBy?: string | null;
+  verifiedAt?: string | null;
+  verificationNotes?: string | null;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocketTransitionEvent {
+  id: string;
+  docketId: string;
+  fromState: InstitutionalDocketLifecycle;
+  toState: InstitutionalDocketLifecycle;
+  actorId: string;
+  actorName: string;
+  rationale: string;
+  timestamp: string;
 }

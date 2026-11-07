@@ -1308,6 +1308,191 @@ router.post('/api/v1/annotations/export', authenticateToken, requireRole(['Admin
   }
 });
 
+/**
+ * Reviewer Authorization Governance Endpoints
+ */
+router.post('/api/v1/reviewers/authorize', authenticateToken, requireRole(['Administrator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, role, verifiedIdentityRef, issuingAuthority, authorizationReference } = req.body;
+    if (!userId || !role || !verifiedIdentityRef || !issuingAuthority || !authorizationReference) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required authorization fields: userId, role, verifiedIdentityRef, issuingAuthority, authorizationReference.'
+      });
+    }
+    if (req.user!.id === userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Self-approval prohibited: Administrators cannot approve their own reviewer authorization.'
+      });
+    }
+    const authorization = db.authorizeReviewer(req.user!, req.body);
+    res.status(201).json({ success: true, data: authorization });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to authorize reviewer.' });
+  }
+});
+
+router.post('/api/v1/reviewers/authorizations/:id/revoke', authenticateToken, requireRole(['Administrator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || reason.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Substantive revocation rationale (minimum 10 characters) is required.'
+      });
+    }
+    const authorization = db.revokeReviewerAuthorization(req.user!, req.params.id, reason.trim());
+    res.json({ success: true, data: authorization });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to revoke reviewer authorization.' });
+  }
+});
+
+router.get('/api/v1/reviewers/authorizations', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const authorizations = db.listReviewerAuthorizations(orgId);
+    res.json({ success: true, data: authorizations });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to list authorizations.' });
+  }
+});
+
+router.get('/api/v1/reviewers/authorizations/:userId', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const auth = db.getReviewerAuthorization(req.params.userId);
+    res.json({ success: true, data: auth });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch authorization.' });
+  }
+});
+
+/**
+ * Institutional Docket Intake & Lifecycle Endpoints
+ */
+router.post('/api/v1/intake/dockets', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Data Collector']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { docketNumber, institutionName, sourceOrganization, authorizationReference, documentPath } = req.body;
+    if (!docketNumber || !institutionName || !sourceOrganization || !authorizationReference) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required docket fields: docketNumber, institutionName, sourceOrganization, authorizationReference.'
+      });
+    }
+    // Path traversal prevention
+    if (documentPath && (documentPath.includes('..') || documentPath.includes('\0'))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid document path: path traversal is prohibited.'
+      });
+    }
+    const docket = db.createInstitutionalDocket(req.user!, req.body);
+    res.status(201).json({ success: true, data: docket });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to create institutional docket.' });
+  }
+});
+
+router.get('/api/v1/intake/dockets', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const dockets = db.getInstitutionalDockets({
+      organizationId: orgId,
+      lifecycleState: req.query.lifecycleState as string,
+      provenanceStatus: req.query.provenanceStatus as string
+    });
+    res.json({ success: true, data: dockets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to list institutional dockets.' });
+  }
+});
+
+router.get('/api/v1/intake/dockets/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const docket = db.getInstitutionalDocketById(req.params.id);
+    if (!docket) {
+      return res.status(404).json({ success: false, error: `Institutional docket '${req.params.id}' not found.` });
+    }
+    // Regional tenant isolation
+    if (req.user!.role !== 'Administrator' && docket.organizationId !== req.user!.organizationId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Docket belongs to another regional organization.' });
+    }
+    const transitions = db.getDocketTransitions(docket.id);
+    res.json({ success: true, data: { ...docket, transitions } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch institutional docket.' });
+  }
+});
+
+router.post('/api/v1/intake/dockets/:id/verify-provenance', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status || !notes || notes.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status and substantive verification notes (minimum 10 characters) are required.'
+      });
+    }
+    const docket = db.verifyDocketProvenance(req.user!, req.params.id, status, notes.trim());
+    res.json({ success: true, data: docket });
+  } catch (err: any) {
+    const statusCode = err.message?.includes('Cross-tenant') ? 403 : 400;
+    res.status(statusCode).json({ success: false, error: err.message || 'Failed to verify docket provenance.' });
+  }
+});
+
+router.post('/api/v1/intake/dockets/:id/transition', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { toState, rationale } = req.body;
+    if (!toState || !rationale || rationale.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Destination state and substantive transition rationale (minimum 10 characters) are required.'
+      });
+    }
+    const docket = db.transitionDocketLifecycle(req.user!, req.params.id, toState, rationale.trim());
+    res.json({ success: true, data: docket });
+  } catch (err: any) {
+    const statusCode = err.message?.includes('Cross-tenant') ? 403 : 400;
+    res.status(statusCode).json({ success: false, error: err.message || 'Failed to transition docket lifecycle.' });
+  }
+});
+
+/**
+ * Cryptographic Audit Ledger Verification Endpoints
+ */
+router.get('/api/v1/ledger/verify', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const verification = db.verifyLedgerChain();
+    res.json({ success: true, data: verification });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to verify ledger integrity.' });
+  }
+});
+
+router.get('/api/v1/ledger/report', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const report = db.generateLedgerIntegrityReport();
+    res.json({ success: true, data: report });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to generate ledger integrity report.' });
+  }
+});
+
+/**
+ * Operational Acceptance Dashboard Endpoint
+ */
+router.get('/api/v1/intake/dashboard', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const dashboard = db.getOperationalDashboard(orgId, req.user!.role);
+    res.json({ success: true, data: dashboard });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to generate operational dashboard.' });
+  }
+});
+
 // Centralized error handler
 router.use(errorHandler);
 

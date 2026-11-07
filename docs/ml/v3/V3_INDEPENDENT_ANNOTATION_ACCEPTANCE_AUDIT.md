@@ -217,3 +217,4 @@ WORKBENCH READY — GOLD-STANDARD DATA NOT YET ESTABLISHED
    - Adjudication rate: $\le 25\%$ (disputes resolved by statutory tribunal).
    - Export acceptance gate: 100% pass rate on Gates 1 through 6.
 4. **Mandatory Stop Gate**: Until the conditions above are met and independently re-audited, no machine learning training runs using `gold_standard_human.jsonl` may be initiated.
+
