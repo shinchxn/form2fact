@@ -130,14 +130,14 @@ flowchart TD
         Auth[JWT & RBAC Module]
         Tenant[Multi-Tenant Isolation]
         Rules[Deterministic AICTE Rules Engine]
-        Storage[Storage Provider: Local Disk / MinIO S3]
-        DB[(Persistent SQLite / PostgreSQL)]
+        Storage[Storage Provider: Local Disk (Append-Only)]
+        DB[(Persistent SQLite with WAL)]
     end
 
     subgraph AIService["AI & ML Microservice (FastAPI + PyTorch)"]
         Router[Inference Router]
         Classifier[Calibrated Pairwise Classifier V2]
-        TempScaling[Temperature Scaling Layer T=1.3468]
+        TempScaling[Temperature Scaling Layer T=1.8182]
         OCR[Tesseract / Textract OCR Pipeline]
     end
 
@@ -217,14 +217,14 @@ Form2Fact implements a rigorous five-class pairwise taxonomy for comparing claim
 ### Backend Gateway
 - **Runtime:** Node.js v24 LTS
 - **Framework:** Express (`4.21.2`)
-- **Database:** Native Node 24 SQLite (`node:sqlite` / `DatabaseSync`)
-- **Storage:** `IStorageProvider` (Local Filesystem with path containment defense & MinIO S3)
+- **Database:** Native Node 24 SQLite (`node:sqlite` / `DatabaseSync`) with Write-Ahead Logging (WAL)
+- **Storage:** `IStorageProvider` (Local Filesystem with path containment defense & SHA-256 verification)
 - **Security:** `jsonwebtoken` (v9.0), `bcryptjs` (v3.0), `multer` (v2.5)
 
 ### Machine Learning & OCR Microservice
 - **API Engine:** Python 3.13 / FastAPI (`0.115.x`) with Uvicorn
 - **ML Framework:** PyTorch (`2.6.x`), HuggingFace Transformers, Scikit-learn
-- **Calibration:** Temperature Scaling ($T = 1.3468$) fitted on validation log-likelihood
+- **Calibration:** Temperature Scaling ($T = 1.8182$) fitted on validation log-likelihood ($N = 162$)
 - **OCR Engine:** Tesseract OCR / `pytesseract` with multi-page fallback
 
 ---
@@ -235,7 +235,7 @@ All screenshots below are captured directly from the running production applicat
 
 ### 1. Institutional Login Portal
 ![Login Portal](docs/assets/screenshots/01-login.png)
-*Role-based institutional authentication portal with one-click test credentials.*
+*Role-based institutional authentication portal with secure administrative access and JWT sessions.*
 
 ---
 
@@ -314,7 +314,7 @@ form2fact/
 │   ├── core/                          # Enterprise storage, logging, jobs, and errors
 │   ├── modules/verification/          # Pairwise classification engine
 │   └── tests/
-│       ├── dataIntegrity.test.ts      # 34-point data integrity test suite
+│       ├── dataIntegrity.test.ts      # 111-point data integrity test suite
 │       └── test-runner.ts             # 23-scenario regression test harness
 ├── src/                               # React 19 Frontend
 │   ├── App.tsx                        # Master application state router
@@ -397,6 +397,9 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `DOCUMENT_STORAGE_PATH` | `./data/dockets` | Custom path | Storage directory for uploaded applicant PDFs. |
 | `AI_SERVICE_URL` | `http://localhost:8000` | `http://ai-service:8000` | Internal URL for pairwise classifier and OCR microservice. |
 | `OCR_SERVICE_TOKEN` | `form2fact_ocr_secret_token_2026` | Secure Secret | Authentication token for internal OCR endpoints. |
+| `BOOTSTRAP_SECRET` | *(disabled)* | Secure Secret | Pre-shared out-of-band secret authorizing initial administrator bootstrap. |
+| `BOOTSTRAP_ADMIN_EMAIL` | *(none)* | Valid email | One-time initial administrator account email on empty database. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | *(none)* | $\ge 12$ chars | One-time initial administrator password (scrubbed from memory immediately). |
 
 ---
 
@@ -407,6 +410,7 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `GET` | `/api/v1/health` | Public | Service health and version status. |
 | `POST` | `/api/v1/auth/login` | Public | Institutional login with email & password. |
 | `GET` | `/api/v1/auth/me` | Authenticated | Revalidate current user session and active role. |
+| `POST` | `/api/v1/auth/bootstrap-admin` | Public (Guarded) | One-time initial administrator creation requiring `BOOTSTRAP_SECRET` on empty database. |
 | `GET` | `/api/v1/applications` | Authenticated | List all regional applications (tenant isolated). |
 | `POST` | `/api/v1/applications` | Reviewer / Admin | Ingest a new institutional application docket. |
 | `GET` | `/api/v1/applications/:id` | Authenticated | Fetch complete docket details, documents, and findings. |
@@ -426,7 +430,7 @@ docker compose -f infrastructure/docker-compose.yml up --build
 The Form2Fact Pairwise Classifier (`champion-v2.0`) is a hybrid architecture combining:
 1. **Deterministic Fast-Paths:** Exact date equivalents, numeric tolerance checking, and standard entity abbreviations bypass neural computation with 100% confidence.
 2. **Lexical & Semantic NLP:** DeBERTa/DistilRoBERTa cross-encoder embedding comparing claim strings against extracted evidence spans.
-3. **Temperature Scaling Calibration:** Raw neural logits are calibrated using post-hoc temperature scaling ($T = 1.3468$) fitted exclusively on held-out validation data to ensure predicted probabilities match real empirical accuracy.
+3. **Temperature Scaling Calibration:** Raw neural logits are calibrated using post-hoc temperature scaling ($T = 1.8182$) fitted exclusively on held-out validation data ($N = 162$) to ensure predicted probabilities match real empirical accuracy.
 4. **Abstention Policy:** Any classification where calibrated confidence falls below **0.60** is automatically redirected to `UNCERTAIN` and routed to a human reviewer.
 
 ---
@@ -445,17 +449,17 @@ The Form2Fact Pairwise Classifier (`champion-v2.0`) is a hybrid architecture com
 Form2Fact maintains 100% pass rates across all test suites:
 
 ```bash
-# 1. Run Data Integrity & Zero-Mock Test Suite (34 Assertions)
+# 1. Run Data Integrity & Zero-Mock Test Suite (111 Assertions)
 npm run test:integrity
 
 # 2. Run Express Server & P0 Security Regression Suite (23 Scenarios)
 npm test
 
-# 3. Run Python ML & Calibrated Inference Pytest Suite (28 Tests)
+# 3. Run Python ML & Calibrated Inference Pytest Suite (32 Tests)
 python -m pytest ai_service/ml/tests -v
 
 # 4. Run Python OCR Unit Tests (5 Tests)
-python -m unittest ai_service/tests/test_ocr.py -v
+python -m pytest ai_service/tests/test_ocr.py -v
 
 # 5. Run TypeScript Type Checking
 npm run lint
@@ -478,7 +482,7 @@ npm run build
 ### Completed (v1.2.0)
 - [x] Multi-tenant regional RBAC with JWT token security.
 - [x] AICTE statutory rules catalog (`RULE-TEN-01`, `RULE-NAME-02`, `RULE-AREA-03`, `RULE-DOC-04`).
-- [x] Calibrated pairwise NLP classifier with temperature scaling ($T = 1.3468$).
+- [x] Calibrated pairwise NLP classifier with temperature scaling ($T = 1.8182$).
 - [x] Zero-mock production data integrity cleanup.
 - [x] Coordinated 3-pane document evidence viewer.
 - [x] Append-only tamper-evident audit ledger.

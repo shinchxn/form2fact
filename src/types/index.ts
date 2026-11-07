@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   department: string;
   organizationId?: string;
+  createdAt?: string;
 }
 
 export interface DeclaredDetails {
@@ -193,7 +194,7 @@ export interface AuditEvent {
   actorId: string;
   actorName: string;
   action: string;
-  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report';
+  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User';
   entityReference: string;
   beforeValue?: string;
   afterValue?: string;

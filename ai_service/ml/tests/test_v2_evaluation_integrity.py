@@ -125,3 +125,42 @@ def test_fastapi_schema_compatibility():
     assert hasattr(res, "requires_human_review")
     assert hasattr(res, "model_version")
 
+def test_exact_feature_contract_parity():
+    """BLOCKER 2: Verify exact 1,544-dim feature vector contract and training/inference parity."""
+    from ai_service.ml.training.train_classifier import compute_tabular_features
+
+    engine = MLPairwiseInferenceEngine.get_instance()
+    assert hasattr(engine.clf, "n_features_in_")
+    expected_dim = engine.clf.n_features_in_
+    assert expected_dim == 1544, f"Estimator expected dimension is {expected_dim}, must be 1544"
+
+    # 1. Semantic embeddings: 4 * 384 = 1536 dim
+    c_text = "Field: institutionName | Type: entity-name | Claim: Pragati Engineering College"
+    e_text = "Field: institutionName | Type: entity-name | Evidence: Pragati Institute of Technology"
+    emb = engine.extractor.encode_pairs([c_text], [e_text])
+    assert emb.shape == (1, 1536), f"Embedding feature shape is {emb.shape}, expected (1, 1536)"
+
+    # 2. Tabular alignment features: 8 dim
+    tab_dict = {
+        "claim_value": "Pragati Engineering College",
+        "evidence_value": "Pragati Institute of Technology",
+        "field_type": "entity-name"
+    }
+    tab_feat = np.array([compute_tabular_features(tab_dict)], dtype=np.float32)
+    assert tab_feat.shape == (1, 8), f"Tabular feature shape is {tab_feat.shape}, expected (1, 8)"
+
+    # 3. Stacked representation: 1536 + 8 = 1544 dim
+    X = np.hstack([emb, tab_feat])
+    assert X.shape == (1, 1544), f"Combined feature vector shape is {X.shape}, expected (1, 1544)"
+
+    # 4. Parity check with estimator
+    probs = engine.predict_probabilities(X)
+    assert probs.shape == (1, 5)
+    assert np.isclose(np.sum(probs), 1.0)
+
+    # 5. Incompatible dimension safety: must raise ValueError
+    X_incompatible = np.zeros((1, 100), dtype=np.float32)
+    with pytest.raises(ValueError, match="Feature dimension mismatch"):
+        engine.predict_probabilities(X_incompatible)
+
+

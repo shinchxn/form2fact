@@ -4,11 +4,15 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import apiRouter from './server/api.ts';
+import { validateProductionConfig } from './server/core/config/validateProductionConfig.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function start() {
+  // Validate production configuration parameters
+  validateProductionConfig();
+
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 

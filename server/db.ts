@@ -215,7 +215,7 @@ export class ScrutinyDatabase {
     const existingUsersCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0);
 
     if (!forceReset) {
-      if (isProduction && existingRulesCount > 0 && existingUsersCount > 0) {
+      if (isProduction && existingRulesCount > 0) {
         return;
       }
       if (!isProduction && existingAppsCount > 0 && existingUsersCount > 0) {
@@ -236,53 +236,96 @@ export class ScrutinyDatabase {
       DELETE FROM users;
     `);
 
-    // 1. Seed Users with verified bcrypt hashes and organization assignments
+    // 1. Seed Users (strictly isolated to non-production or explicit bootstrap)
     const insertUser = this.db.prepare(`
       INSERT INTO users (id, displayName, email, passwordHash, role, department, organizationId, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const defaultUsers: (DatabaseUser & { organizationId?: string })[] = [
-      {
-        id: 'usr-001',
-        displayName: 'Dr. Aruna Rao',
-        email: 'aruna.rao@scrutiny.edu.in',
-        passwordHash: bcrypt.hashSync('Reviewer123!', 10),
-        role: 'Reviewer',
-        department: 'Regional Scrutiny Committee - Western Directorate',
-        organizationId: 'org-aicte-western'
-      },
-      {
-        id: 'usr-002',
-        displayName: 'V. K. Sharma',
-        email: 'vk.sharma@scrutiny.edu.in',
-        passwordHash: bcrypt.hashSync('Admin123!', 10),
-        role: 'Administrator',
-        department: 'Quality Assurance Directorate',
-        organizationId: 'org-aicte-western'
-      },
-      {
-        id: 'usr-003',
-        displayName: 'S. Meenakshi',
-        email: 'meenakshi.s@audit.gov.in',
-        passwordHash: bcrypt.hashSync('Auditor123!', 10),
-        role: 'Read-only Viewer',
-        department: 'Statutory Compliance Audit',
-        organizationId: 'org-aicte-western'
-      },
-      {
-        id: 'usr-004',
-        displayName: 'Dr. Rajesh Verma',
-        email: 'rajesh.verma@scrutiny.edu.in',
-        passwordHash: bcrypt.hashSync('Reviewer123!', 10),
-        role: 'Reviewer',
-        department: 'Regional Scrutiny Committee - Central Directorate',
-        organizationId: 'org-aicte-central'
-      }
-    ];
+    if (isProduction || seedDemoDisabled) {
+      // Check for one-time secure administrator bootstrap via environment variables
+      const bEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.toLowerCase().trim();
+      const bPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+      const bName = process.env.BOOTSTRAP_ADMIN_NAME || 'System Administrator';
+      const bOrg = process.env.BOOTSTRAP_ADMIN_ORG || 'org-aicte-western';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    for (const u of defaultUsers) {
-      insertUser.run(u.id, u.displayName, u.email, u.passwordHash, u.role, u.department, u.organizationId || 'org-aicte-western', '2026-01-01T00:00:00.000Z');
+      if (bEmail && bPassword) {
+        if (!emailRegex.test(bEmail)) {
+          console.error('[SECURITY ERROR] BOOTSTRAP_ADMIN_EMAIL is not a valid email address!');
+        } else if (bPassword.length < 12) {
+          console.error('[SECURITY ERROR] BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters in production!');
+        } else if (['Admin123!', 'Password123!', 'Reviewer123!', 'Administrator123!'].includes(bPassword)) {
+          console.error('[SECURITY ERROR] BOOTSTRAP_ADMIN_PASSWORD cannot use known default/trivial credentials in production!');
+        } else {
+          this.db.exec('BEGIN IMMEDIATE');
+          try {
+            const count = Number((this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0);
+            if (count === 0) {
+              const adminId = `usr-admin-${crypto.randomUUID().slice(0, 8)}`;
+              const hash = bcrypt.hashSync(bPassword, 12);
+              const now = new Date().toISOString();
+              insertUser.run(adminId, bName, bEmail, hash, 'Administrator', 'System Administration Directorate', bOrg, now);
+              this.db.exec('COMMIT');
+              console.log(`[SECURITY] One-time administrator provisioned for email ${bEmail}. Enforce password rotation policy.`);
+            } else {
+              this.db.exec('ROLLBACK');
+            }
+          } catch (e) {
+            this.db.exec('ROLLBACK');
+            console.error('[SECURITY ERROR] Failed to provision bootstrap administrator:', e);
+          } finally {
+            // Strictly delete plaintext password from environment memory
+            delete process.env.BOOTSTRAP_ADMIN_PASSWORD;
+          }
+        }
+      } else {
+        console.log('[SECURITY] Production mode active: zero default/demo users seeded. Provision administrator via BOOTSTRAP_ADMIN_EMAIL or /api/v1/auth/bootstrap-admin.');
+      }
+    } else {
+      // Development / Evaluator Sandbox Demo Users
+      const defaultUsers: (DatabaseUser & { organizationId?: string })[] = [
+        {
+          id: 'usr-001',
+          displayName: 'Dr. Aruna Rao',
+          email: 'aruna.rao@scrutiny.edu.in',
+          passwordHash: bcrypt.hashSync('Reviewer123!', 10),
+          role: 'Reviewer',
+          department: 'Regional Scrutiny Committee - Western Directorate',
+          organizationId: 'org-aicte-western'
+        },
+        {
+          id: 'usr-002',
+          displayName: 'V. K. Sharma',
+          email: 'vk.sharma@scrutiny.edu.in',
+          passwordHash: bcrypt.hashSync('Admin123!', 10),
+          role: 'Administrator',
+          department: 'Quality Assurance Directorate',
+          organizationId: 'org-aicte-western'
+        },
+        {
+          id: 'usr-003',
+          displayName: 'S. Meenakshi',
+          email: 'meenakshi.s@audit.gov.in',
+          passwordHash: bcrypt.hashSync('Auditor123!', 10),
+          role: 'Read-only Viewer',
+          department: 'Statutory Compliance Audit',
+          organizationId: 'org-aicte-western'
+        },
+        {
+          id: 'usr-004',
+          displayName: 'Dr. Rajesh Verma',
+          email: 'rajesh.verma@scrutiny.edu.in',
+          passwordHash: bcrypt.hashSync('Reviewer123!', 10),
+          role: 'Reviewer',
+          department: 'Regional Scrutiny Committee - Central Directorate',
+          organizationId: 'org-aicte-central'
+        }
+      ];
+
+      for (const u of defaultUsers) {
+        insertUser.run(u.id, u.displayName, u.email, u.passwordHash, u.role, u.department, u.organizationId || 'org-aicte-western', '2026-01-01T00:00:00.000Z');
+      }
     }
 
     // 2. Seed Rules
@@ -1311,6 +1354,104 @@ export class ScrutinyDatabase {
       department: row.department,
       organizationId: row.organizationId || 'org-aicte-western'
     };
+  }
+
+  getUsersCount(): number {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any;
+    return Number(row?.count || 0);
+  }
+
+  createUser(user: DatabaseUser & { organizationId?: string }): User {
+    const insert = this.db.prepare(`
+      INSERT INTO users (id, displayName, email, passwordHash, role, department, organizationId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const createdAt = user.createdAt || new Date().toISOString();
+    insert.run(
+      user.id,
+      user.displayName,
+      user.email.toLowerCase().trim(),
+      user.passwordHash,
+      user.role,
+      user.department,
+      user.organizationId || 'org-aicte-western',
+      createdAt
+    );
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      organizationId: user.organizationId || 'org-aicte-western'
+    };
+  }
+
+  bootstrapAdmin(data: {
+    email: string;
+    password: string;
+    displayName: string;
+    organizationId?: string;
+  }): { success: boolean; user?: User; error?: string; statusCode: number } {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanEmail = (data.email || '').toLowerCase().trim();
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'A valid email address is required for administrator provisioning.', statusCode: 400 };
+    }
+    if (!data.displayName || !data.displayName.trim()) {
+      return { success: false, error: 'displayName is required.', statusCode: 400 };
+    }
+    if (typeof data.password !== 'string' || data.password.length < 12) {
+      return { success: false, error: 'Administrator password must be at least 12 characters.', statusCode: 400 };
+    }
+    const trivialPasswords = ['Admin123!', 'Password123!', 'Reviewer123!', 'Administrator123!'];
+    if (trivialPasswords.includes(data.password)) {
+      return { success: false, error: 'Administrator password cannot use known default/trivial credentials.', statusCode: 400 };
+    }
+
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const userCount = Number((this.db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0);
+      if (userCount > 0) {
+        this.db.exec('ROLLBACK');
+        return { success: false, error: 'Bootstrap disabled: System administrator already provisioned.', statusCode: 403 };
+      }
+
+      const adminId = `usr-admin-${crypto.randomUUID().slice(0, 8)}`;
+      const passwordHash = bcrypt.hashSync(data.password, 12);
+      const now = new Date().toISOString();
+      const orgId = data.organizationId || 'org-aicte-western';
+
+      this.db.prepare(`
+        INSERT INTO users (id, displayName, email, passwordHash, role, department, organizationId, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(adminId, data.displayName.trim(), cleanEmail, passwordHash, 'Administrator', 'System Administration Directorate', orgId, now);
+
+      this.recordAudit({
+        actorId: adminId,
+        actorName: data.displayName.trim(),
+        action: 'System Administrator Bootstrapped',
+        entityType: 'User',
+        entityReference: adminId,
+        afterValue: `Admin created: ${cleanEmail}`,
+        note: 'Initial system administrator account provisioned.'
+      });
+
+      this.db.exec('COMMIT');
+
+      const safeUser: User = {
+        id: adminId,
+        displayName: data.displayName.trim(),
+        email: cleanEmail,
+        role: 'Administrator',
+        department: 'System Administration Directorate',
+        organizationId: orgId
+      };
+      return { success: true, user: safeUser, statusCode: 201 };
+    } catch (err: any) {
+      this.db.exec('ROLLBACK');
+      return { success: false, error: `Database error during bootstrap: ${err.message}`, statusCode: 500 };
+    }
   }
 
   getAllUsers(): User[] {

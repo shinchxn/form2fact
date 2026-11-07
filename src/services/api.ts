@@ -420,6 +420,9 @@ export interface PairwiseComparisonResult {
   evidenceList: any[];
   requiresHumanReview: boolean;
   modelVersion: string;
+  inferenceSource?: 'calibrated_ml' | 'deterministic_rule' | 'deterministic_fallback' | 'fast_path';
+  modelStatus?: 'available' | 'unavailable' | 'bypassed';
+  fallbackApplied?: boolean;
 }
 
 export async function runPairwiseComparison(data: PairwiseComparisonRequest): Promise<PairwiseComparisonResult> {
