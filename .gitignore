@@ -35,9 +35,10 @@ ai_service/ml/data/v2_acquisition/extracted/
 *.bin
 
 # V3 Machine Learning Data Isolation & Confidentiality Guards
-ai_service/ml/data/v3/raw/*
-!ai_service/ml/data/v3/raw/.gitkeep
-!ai_service/ml/data/v3/raw/README.md
+ai_service/ml/data/v3/raw/**
+!ai_service/ml/data/v3/raw/**/
+!ai_service/ml/data/v3/raw/**/.gitkeep
+!ai_service/ml/data/v3/raw/**/README.md
 
 # Prevent accidental commitment of confidential institutional documents in V3 pipelines
 ai_service/ml/data/v3/**/*.pdf

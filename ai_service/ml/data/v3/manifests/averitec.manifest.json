@@ -1,0 +1,32 @@
+{
+  "dataset_id": "averitec",
+  "name": "AVeriTeC: Automated Verification of Real-world Textual Claims",
+  "source": "https://fever.ai/dataset/averitec.html",
+  "repository_id": "chenxwh/AVeriTeC (repo_type: model)",
+  "revision": "2ca9dee23a2a6fa64c5bd918e0cd28ed0aa09031",
+  "download_date": "2026-11-07T02:47:11Z",
+  "licence": "CC BY-NC 4.0",
+  "commercial_use_permitted": false,
+  "licence_restriction_notes": "Non-commercial license. Usable exclusively for research, error analysis, and benchmark evaluation. Strictly isolated from commercial release weights.",
+  "primary_task": "Real-world claim verification with question-answer evidence justifications",
+  "acquisition_scope": "Train and Development question-answer claim verification sets",
+  "files": [
+    {
+      "filename": "dev.json",
+      "relative_path": "averitec\\dev.json",
+      "size_bytes": 1785475,
+      "sha256": "499793726b4a5406780928a3d9dedc48d6dd53de778f22437d129cacdb08e300",
+      "record_count": 500,
+      "format": "json"
+    },
+    {
+      "filename": "train.json",
+      "relative_path": "averitec\\train.json",
+      "size_bytes": 10184813,
+      "sha256": "ae5eda7c42ddf1695ef185a7ba1bc716928f5adf57103e4f78aae5f9afe00f9c",
+      "record_count": 3068,
+      "format": "json"
+    }
+  ],
+  "total_records": 3568
+}

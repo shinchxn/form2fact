@@ -1,0 +1,23 @@
+{
+  "dataset_id": "fever",
+  "name": "Fact Extraction and VERification (FEVER)",
+  "source": "https://fever.ai/dataset/fever.html",
+  "repository_id": "direct_official:fever.ai/download/fever",
+  "revision": "2018_v1.0",
+  "download_date": "2026-11-07T02:47:12Z",
+  "licence": "CC BY-SA 3.0 / Wikipedia Copyright Policy",
+  "commercial_use_permitted": true,
+  "primary_task": "Fact Claim Verification (SUPPORTS, REFUTES, NOT ENOUGH INFO)",
+  "acquisition_scope": "Official labelled shared-task development benchmark split",
+  "files": [
+    {
+      "filename": "shared_task_dev.jsonl",
+      "relative_path": "fever\\shared_task_dev.jsonl",
+      "size_bytes": 4349935,
+      "sha256": "e89865bfe1b4dd054e03dd57d7241a6fde24862905f31117cf0cd719f7c78df7",
+      "record_count": 19998,
+      "format": "jsonl"
+    }
+  ],
+  "total_records": 19998
+}

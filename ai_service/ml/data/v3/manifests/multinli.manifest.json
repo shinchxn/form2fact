@@ -1,0 +1,31 @@
+{
+  "dataset_id": "multinli",
+  "name": "Multi-Genre Natural Language Inference (MultiNLI)",
+  "source": "https://huggingface.co/datasets/nyu-mll/multi_nli",
+  "repository_id": "nyu-mll/multi_nli",
+  "revision": "da70db2af9d09693783c3320c4249840212ee221",
+  "download_date": "2026-11-07T02:47:08Z",
+  "licence": "CC BY-SA 4.0 / ODC Open",
+  "commercial_use_permitted": true,
+  "primary_task": "Cross-domain sentence-pair reasoning across 10 distinct genres",
+  "acquisition_scope": "Validation matched & mismatched benchmark splits",
+  "files": [
+    {
+      "filename": "validation_matched-00000-of-00001.parquet",
+      "relative_path": "multinli\\validation_matched-00000-of-00001.parquet",
+      "size_bytes": 4938568,
+      "sha256": "350c26950b55f460b50d36c76aef87d64b49c78812d7abf7bf97e5fede10f186",
+      "record_count": 9815,
+      "format": "parquet"
+    },
+    {
+      "filename": "validation_mismatched-00000-of-00001.parquet",
+      "relative_path": "multinli\\validation_mismatched-00000-of-00001.parquet",
+      "size_bytes": 5104992,
+      "sha256": "6b0e1231cebedd255000a7d1732af37ad0500902239db625e231ed77c0c8f2f8",
+      "record_count": 9832,
+      "format": "parquet"
+    }
+  ],
+  "total_records": 19647
+}
