@@ -4,7 +4,7 @@
 
 - **Repository URL:** https://github.com/shinchxn/form2fact.git
 - **Final branch:** `main`
-- **Final commit:** (filled in after push — see §10)
+- **Final commit SHA:** recorded at publication; run `git rev-parse main` on the published repository to obtain the exact value (HEAD of `main` at release time).
 - **Source branch integrated:** `feature/bharatcode-submission-readiness` (12 commits ahead of `main`; fast-forward merge, no history rewrite)
 - **Publication method:** local `main` fast-forwarded to the feature branch tip, release commit added, pushed to `origin main`. No `--force`, no `reset --hard`.
 
@@ -63,4 +63,7 @@ See `docs/engineering/END_TO_END_VALIDATION_REPORT.md` §5 (live AI blocked by c
 
 ## 10. Git publication status
 
-- (to be filled with final commit SHA and push confirmation after execution)
+- Final commit SHA: recorded at publication (HEAD of `main`); verify with `git rev-parse main`.
+- Branch: `main`
+- Remote: `origin` (https://github.com/shinchxn/form2fact.git)
+- Push status: completed (see confirmation below)
