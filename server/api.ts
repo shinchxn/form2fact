@@ -24,6 +24,8 @@ import { jobQueue } from './core/jobs/index.ts';
 import { storageProvider } from './core/storage/index.ts';
 import { validate } from './core/validation/validate.ts';
 import { errorHandler } from './core/errors/errorHandler.ts';
+import { securityHeaders } from './core/securityHeaders.ts';
+import { authRateLimiter } from './core/rateLimit.ts';
 
 const router = express.Router();
 
@@ -35,6 +37,9 @@ const upload = multer({
 // JSON and URL-encoded body parsers
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
+
+// Baseline security headers on every API response
+router.use(securityHeaders);
 
 // =========================================================================
 // PUBLIC ENDPOINTS (No JWT required)
@@ -54,8 +59,9 @@ router.get('/api/v1/health', (_req: Request, res: Response) => {
 
 /**
  * Institutional Login with email and password
+ * MED-2 remediation: bounded by per-IP+email rate limiter (429 on excess)
  */
-router.post('/api/v1/auth/login', (req: Request, res: Response) => {
+router.post('/api/v1/auth/login', authRateLimiter.middleware('auth-login'), (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ success: false, error: 'Email and password are required.' });
@@ -108,7 +114,7 @@ router.post('/api/v1/auth/login', (req: Request, res: Response) => {
  * P0 Security: Requires high-entropy out-of-band BOOTSTRAP_SECRET.
  * Employs atomic SQLite transaction locking to eliminate administrator claiming race conditions.
  */
-router.post('/api/v1/auth/bootstrap-admin', (req: Request, res: Response) => {
+router.post('/api/v1/auth/bootstrap-admin', authRateLimiter.middleware('auth-bootstrap'), (req: Request, res: Response) => {
   const expectedSecret = process.env.BOOTSTRAP_SECRET;
   if (!expectedSecret || !expectedSecret.trim()) {
     return res.status(403).json({
@@ -156,9 +162,10 @@ router.post('/api/v1/auth/bootstrap-admin', (req: Request, res: Response) => {
 });
 
 /**
- * List available demo user personas (public metadata; password hashes strictly excluded)
+ * List available user personas (authenticated; MED-1 remediation).
+ * Password hashes are strictly excluded from the response.
  */
-router.get('/api/v1/users', (_req: Request, res: Response) => {
+router.get('/api/v1/users', authenticateToken, (_req: Request, res: Response) => {
   const users = db.getAllUsers().map(u => ({
     id: u.id,
     displayName: u.displayName,
@@ -187,39 +194,43 @@ router.get('/api/v1/auth/me', authenticateToken, (req: AuthenticatedRequest, res
 /**
  * Switch persona in demonstration mode
  * P0-02 Defense: Client-supplied roles are NEVER trusted. Claims are derived strictly from persistent DB records.
+ * HIGH-1 remediation: requires a valid authenticated session. Previously unauthenticated
+ * callers could mint session tokens for any seeded user without credentials.
  */
 router.post('/api/v1/user', (req: Request, res: Response) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ success: false, error: 'Dynamic persona switching is disabled in production.' });
   }
 
-  const targetId = req.body?.id;
-  if (!targetId) {
-    return res.status(400).json({ success: false, error: 'Target user ID is required.' });
-  }
+  return authenticateToken(req as AuthenticatedRequest, res, () => {
+    const targetId = req.body?.id;
+    if (!targetId) {
+      return res.status(400).json({ success: false, error: 'Target user ID is required.' });
+    }
 
-  const user = db.getUserById(targetId);
-  if (!user) {
-    return res.status(404).json({ success: false, error: 'User not found in institutional registry.' });
-  }
+    const user = db.getUserById(targetId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found in institutional registry.' });
+    }
 
-  // Derive claims strictly from persistent database record, ignoring any client-supplied role
-  const resolvedUser: User = {
-    id: user.id,
-    displayName: user.displayName,
-    email: user.email,
-    role: user.role,
-    department: user.department,
-    organizationId: user.organizationId
-  };
+    // Derive claims strictly from persistent database record, ignoring any client-supplied role
+    const resolvedUser: User = {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      organizationId: user.organizationId
+    };
 
-  db.setCurrentUser(resolvedUser);
-  const token = generateToken(resolvedUser);
+    db.setCurrentUser(resolvedUser);
+    const token = generateToken(resolvedUser);
 
-  res.json({
-    success: true,
-    data: resolvedUser,
-    token
+    res.json({
+      success: true,
+      data: resolvedUser,
+      token
+    });
   });
 });
 
@@ -1143,8 +1154,16 @@ router.get('/api/v1/applications/:id/audit', authenticateToken, (req: Authentica
     return res.status(404).json({ success: false, error: 'Application not found' });
   }
 
+  // Include docket-level events plus finding-level events (e.g., adjudications)
+  // whose entity reference is a finding belonging to this application.
+  const findingRefs = db.getFindingsByApplication(req.params.id, userOrgId, isAdmin)
+    .map(f => f.reference)
+    .filter((r): r is string => Boolean(r));
+
   const events = db.getAuditEvents(userOrgId, isAdmin).filter(
-    e => e.entityReference.includes(app.referenceNumber) || e.entityReference.includes(app.id)
+    e => e.entityReference.includes(app.referenceNumber) ||
+         e.entityReference.includes(app.id) ||
+         findingRefs.some(ref => e.entityReference.includes(ref))
   );
   res.json({ success: true, data: events });
 });

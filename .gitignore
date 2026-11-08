@@ -19,9 +19,12 @@ env/
 
 # AI Studio session cache
 .aistudio/
+.opencode/
 
 # Runtime storage & databases (preserve directory structure and README)
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/*.sqlite
 data/dockets/*
 !data/dockets/.gitkeep

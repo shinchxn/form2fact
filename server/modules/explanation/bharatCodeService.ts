@@ -132,7 +132,13 @@ export function truncateExcerpt(text: string, maxLen = 400): string {
 export class BharatCodeService {
   private static readonly DEFAULT_BASE_URL = 'https://bharatcode.ai/api/model/v1';
   private static readonly DEFAULT_MODEL = 'qwen-3.8-27b';
-  private static readonly DEFAULT_TIMEOUT_MS = 5000;
+  /**
+   * qwen-3.8-27b is a reasoning model: it consumes part of the completion
+   * budget on chain-of-thought before emitting the final answer. A 5 s
+   * timeout is far too short; 60 s is the verified default and can be raised
+   * per deployment via BHARATCODE_TIMEOUT_MS.
+   */
+  private static readonly DEFAULT_TIMEOUT_MS = 60000;
 
   /**
    * Retrieves the configured API key without leaking it to logs.
@@ -178,7 +184,7 @@ export class BharatCodeService {
 
     const model = this.getModel();
     const baseUrl = this.getBaseUrl();
-    const timeoutMs = options.timeoutMs ?? this.DEFAULT_TIMEOUT_MS;
+    const timeoutMs = options.timeoutMs ?? Number(process.env.BHARATCODE_TIMEOUT_MS || this.DEFAULT_TIMEOUT_MS);
     const fetchImpl = options.fetchFn ?? fetch;
 
     // 2. Data minimization & Redaction
@@ -289,9 +295,31 @@ Provide your structured explanation in JSON:`;
 
       // 6. Parse response JSON
       const rawBody = await response.json() as any;
-      const content = rawBody?.choices?.[0]?.message?.content || rawBody?.output || '';
+      const message = rawBody?.choices?.[0]?.message;
+      const content = message?.content ?? rawBody?.output ?? '';
+      const usage = rawBody?.usage;
+      if (usage?.total_tokens) {
+        logger.info('[BharatCode] completion usage', {
+          model,
+          promptTokens: usage.prompt_tokens,
+          completionTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens
+        });
+      }
 
       if (!content || typeof content !== 'string') {
+        // qwen-3.8-27b is a reasoning model: when the completion budget is
+        // exhausted by chain-of-thought (reasoning_content) before the final
+        // answer is produced, `content` arrives as null. Report this precisely
+        // instead of silently fabricating an explanation.
+        if (typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0) {
+          return {
+            success: false,
+            status: 'validation_error',
+            error: 'BharatCode model spent its token budget on internal reasoning and returned no final answer. Increase BHARATCODE_TIMEOUT_MS/max-tokens headroom or retry; deterministic finding is preserved.',
+            latencyMs
+          };
+        }
         return {
           success: false,
           status: 'validation_error',

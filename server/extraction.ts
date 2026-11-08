@@ -1,6 +1,7 @@
 import { ExtractedField, DocumentType, Application, DocumentRecord, Finding } from '../src/types/index.ts';
 import { normalizeDate } from './rulesEngine.ts';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { generateDeepScrutinyWithBharatCode } from './modules/explanation/bharatCodeDeepScrutiny.ts';
 
 let aiInstance: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
@@ -229,9 +230,27 @@ Rules:
     } catch (err: any) {
       console.warn('Gemini 4 Argon high-thinking call fallback triggered:', err.message);
     }
+  } else {
+    // Provider chain step 2: the workspace-provided BharatCode model (qwen-3.8-27b).
+    // Documented chain (not a silent substitution): Gemini primary → BharatCode
+    // advisory → deterministic local synthesis. The memo remains advisory only.
+    const bharatMemo = await generateDeepScrutinyWithBharatCode(application, documents, fields, findings, customQuery);
+    if (bharatMemo.ok) {
+      return {
+        generatedAt: new Date().toISOString(),
+        modelUsed: bharatMemo.modelUsed,
+        thinkingMode: bharatMemo.thinkingMode,
+        isAiGenerated: true,
+        summary: bharatMemo.summary,
+        crossDocumentObservations: bharatMemo.crossDocumentObservations,
+        recommendedOfficerActions: bharatMemo.recommendedOfficerActions,
+        uncertaintyNotice: bharatMemo.uncertaintyNotice
+      };
+    }
+    console.warn('BharatCode deep scrutiny unavailable; deterministic fallback engaged:', bharatMemo.error);
   }
 
-  // Deterministic fallback synthesis when paid API key is not attached
+  // Deterministic fallback synthesis when no external model is reachable
   const openCount = findings.filter(f => f.status === 'Open' || f.status === 'Unable to Determine').length;
   const scannedDocs = documents.filter(d => d.isScannedOrTextPoor);
 
@@ -262,12 +281,12 @@ Rules:
 
   return {
     generatedAt: new Date().toISOString(),
-    modelUsed: 'Deterministic Synthesis Engine (Local Fallback — gemini-4-argon configured)',
-    thinkingMode: 'ThinkingLevel.HIGH (Ready)',
+    modelUsed: 'Deterministic Synthesis Engine (Local Fallback — external model unavailable)',
+    thinkingMode: 'deterministic',
     isAiGenerated: false,
     summary: observations.join(' '),
     crossDocumentObservations: observations,
     recommendedOfficerActions: actions,
-    uncertaintyNotice: 'Generated via deterministic cross-document rule synthesis. Attach a paid Gemini API key in Settings > Secrets to enable live gemini-4-argon High-Thinking narrative reasoning.'
+    uncertaintyNotice: 'Generated via deterministic cross-document rule synthesis. Configure GEMINI_API_KEY (primary) or BHARATCODE_API_KEY (advisory chain) to enable AI-assisted narrative reasoning; deterministic rules remain authoritative either way.'
   };
 }

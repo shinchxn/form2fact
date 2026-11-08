@@ -14,6 +14,7 @@ async function start() {
   validateProductionConfig();
 
   const app = express();
+  app.disable('x-powered-by'); // Do not advertise the framework
   const PORT = Number(process.env.PORT) || 3000;
 
   // Mount API routes
