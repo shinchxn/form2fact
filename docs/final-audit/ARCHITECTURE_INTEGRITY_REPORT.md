@@ -3,7 +3,7 @@
 **Audit Date:** 2026-11-06  
 **Auditor:** Principal Software Architect & DevOps Lead  
 **Repository:** [https://github.com/shinchxn/form2fact.git](https://github.com/shinchxn/form2fact.git)  
-**Evaluated Branch:** `main` (commit `9611575`)  
+**Evaluated Branch:** `audit/post-release-verification` (commit `435b1c2`)  
 **Scope:** Core system topology, microservice decoupling, domain extensibility, persistence adapters, and execution flows.
 
 ---
@@ -15,9 +15,9 @@ Form2Fact is engineered as an evidence-first institutional document intelligence
 ```mermaid
 flowchart TD
     Client["React 19 + Vite 8 SPA Client (Port 3000)"] -->|"REST + Bearer JWT"| Gateway["Express 4 Gateway & Scrutiny Engine (Port 3000)"]
-    Gateway -->|"Synchronous SQLite Driver (DatabaseSync)"| DB[("Local SQLite Database (./data/form2fact.db)")]
-    Gateway -->|"IStorageProvider / FS"| Storage["Durable Docket Store (./data/dockets/)"]
-    Gateway -->|"HTTP JSON REST (/classify-pair, /batch-classify)"| AIService["Python FastAPI AI Microservice (Port 8000)"]
+    Gateway -->|"Synchronous SQLite Driver (node:sqlite DatabaseSync)"| DB[("Local SQLite Database (./data/form2fact.db)")]
+    Gateway -->|"LocalDiskStorageProvider (Durable FS)"| Storage["Durable Docket Store (./data/dockets/)"]
+    Gateway -->|"HTTP JSON REST (/api/v1/classify-pair)"| AIService["Python FastAPI AI Microservice (Port 8000)"]
     AIService -->|"Feature Assembly (MiniLM Embeddings)"| PyTorch["PyTorch & HuggingFace Models"]
     AIService -->|"Inference & Scaling (T=1.8182)"| Head["HistGradientBoostingClassifier"]
     AIService -->|"Tesseract OCR Engine"| OCR["OCR Pipeline (pytesseract)"]
@@ -56,7 +56,7 @@ export interface DomainPack {
 
 ---
 
-## 3. Storage Provider Abstraction
+## 3. Storage Provider Architecture & Reality
 
 Document ingestion and retrieval operate via the `IStorageProvider` contract defined in `server/core/storage/index.ts`:
 
@@ -71,9 +71,9 @@ export interface IStorageProvider {
 }
 ```
 
-### Implementations & Reality
-- **`LocalDiskStorageProvider` (Default / Active):** Persists dockets under `./data/dockets/${applicationId}/${docId}.pdf`. Implements directory containment checks to prevent path traversal attacks. Computes SHA-256 integrity checksums upon write.
-- **`MinioS3StorageProvider` (Enterprise Ready):** Implemented in `server/core/storage/index.ts` for object-store deployments backed by S3 or MinIO. Activated when `STORAGE_PROVIDER=s3` is configured in environment variables.
+### Forensic Implementation Reality
+- **`LocalDiskStorageProvider` (Active Implementation):** Persists dockets under `./data/dockets/${applicationId}/${docId}.pdf`. Implements directory containment checks to prevent path traversal attacks. Computes SHA-256 integrity checksums upon write.
+- **S3 / MinIO Status:** The interface contract `IStorageProvider` is architected for cloud object storage, but **only `LocalDiskStorageProvider` is implemented** in the current codebase. No native S3/MinIO SDK is installed in `package.json`.
 
 ---
 
@@ -81,42 +81,45 @@ export interface IStorageProvider {
 
 The codebase provides an asynchronous job queue abstraction in `server/core/jobs/index.ts` featuring `IJobQueue` and `InMemoryJobQueue` with job statuses (`queued`, `processing`, `completed`, `failed`), progress metrics, and retry policies.
 
-### Architectural Reality Assessment:
-- **Status:** **HYBRID EXECUTION.**
+### Operational Reality
 - The `InMemoryJobQueue` infrastructure is fully implemented and tested.
-- In current operational workflows, document extraction and pairwise inference are executed synchronously inside Express route handlers (`server/routes.ts`) to provide immediate synchronous feedback to scrutiny officers during interactive review.
-- The job queue is wired to handle deferred batch recalculations during bulk regulatory re-audits.
+- In current operational workflows, document extraction and pairwise inference are executed synchronously inside Express route handlers (`server/api.ts`) to provide immediate synchronous feedback to scrutiny officers during interactive review.
+- The asynchronous queue is exposed via `GET /api/v1/jobs/:id` for deferred background recalculations.
 
 ---
 
-## 5. Persistence Driver Architecture (SQLite vs. PostgreSQL)
+## 5. Persistence Driver Architecture (SQLite vs. PostgreSQL Reality)
 
-### Active Driver: Native Node 24 SQLite (`node:sqlite`)
+### Active Driver: Native Node 24 SQLite (`node:sqlite DatabaseSync`)
 - Implemented in `server/db.ts` utilizing `DatabaseSync` from Node.js 24 standard library.
 - Zero third-party binary C++ binding dependencies (`better-sqlite3` eliminated), guaranteeing cross-platform deterministic operation without compilation toolchains.
 - Uses Write-Ahead Logging (WAL) and foreign key constraint enforcement (`PRAGMA foreign_keys = ON;`).
 - Transactions are managed synchronously using native transaction blocks (`BEGIN IMMEDIATE ... COMMIT/ROLLBACK`).
 
-### Enterprise Database Target: PostgreSQL
+### PostgreSQL Enterprise Profile Reality:
 - PostgreSQL schemas and migration scripts are maintained under `infrastructure/db/init.sql`.
-- Configured for multi-instance distributed deployments via `docker-compose.enterprise.yml`.
-- Dual database strategy allows single-binary embedded deployment for air-gapped regional scrutiny offices while maintaining zero-code-change enterprise compatibility.
+- In `docker-compose.yml`, the `enterprise` profile launches a PostgreSQL 16 container and initializes the schema.
+- **Runtime Driver Audit:** The Node.js application **does not have a PostgreSQL client driver** (e.g., `pg`, `postgres`) installed in `package.json`, and `server/db.ts` does not contain connection logic for PostgreSQL. The application runtime exclusively uses SQLite. PostgreSQL serves currently as a schema migration target rather than an active dual driver.
 
 ---
 
-## 6. Gateway-to-AI Microservice Protocol
+## 6. Gateway-to-AI Microservice Protocol & Fallback Controls
 
-The communication bridge between Express Gateway (`server/pairwiseEngine.ts`) and Python AI microservice (`ai_service/app/main.py`) operates via HTTP/1.1 REST:
+The communication bridge between Express Gateway (`server/modules/verification/pairwiseEngine.ts`) and Python AI microservice (`ai_service/app/main.py`) operates via HTTP/1.1 REST:
 
-1. **Health Verification:** Gateway probes `http://localhost:8000/health` during startup.
-2. **Payload Structure:** Scrutiny engine transmits JSON payload with `declared_field_name`, `declared_field_value`, `evidence_field_name`, `evidence_field_value`, and `document_type`.
-3. **Inference Execution:**
-   - Text pair encoded into 384-dimensional dense semantic vectors using `sentence-transformers/all-MiniLM-L6-v2`.
-   - Structural tabular features (Levenshtein ratio, numerical delta, date concordance, token containment) synthesized into 1,544-element feature vector.
+1. **Endpoint:** `POST /api/v1/classify-pair` on port 8000.
+2. **Feature Pipeline:**
+   - 384-dimensional dense semantic vectors using `all-MiniLM-L6-v2`.
+   - 160 structural tabular features synthesized into 1,544-element feature vector.
    - `HistGradientBoostingClassifier` executes multi-class classification.
-   - Temperature scaling wrapper ($T = 1.8182$) scales raw decision logits.
+   - Temperature scaling ($T = 1.8182$) calibrates posterior probabilities.
    - Confidence threshold evaluator enforces 0.60 cutoff: below 0.60, classification yields `UNCERTAIN`.
-4. **Fault Tolerance Heuristic:** If the AI microservice is temporarily unreachable, `server/pairwiseEngine.ts` executes a deterministic lexical fallback comparison, tagging the finding with `model_source: 'lexical_fallback'` to prevent platform outage.
+3. **Explicit Fallback & Strict Mode Controls:**
+   - When the Python microservice is offline or returns HTTP 503:
+     - In strict mode (`ALLOW_DETERMINISTIC_FALLBACK=false` or `REQUIRE_ML_INFERENCE=true`), the gateway returns `UNCERTAIN` with `modelStatus: 'unavailable'`, `fallbackApplied: false`, and `modelVersion: 'form2fact-ml-unavailable'`.
+     - In permissive mode, the gateway falls back to deterministic token screening, but explicitly flags `inferenceSource: 'deterministic_fallback'`, `modelStatus: 'unavailable'`, `fallbackApplied: true`, and prefixes the explanation with `[FALLBACK: ML service offline]`.
+   - Fast-path exact matches are tagged `inferenceSource: 'fast_path'` with `modelStatus: 'bypassed'`.
+   - Successful ML predictions are tagged `inferenceSource: 'calibrated_ml'` with `modelStatus: 'available'`.
 
 ---
 
@@ -125,11 +128,11 @@ The communication bridge between Express Gateway (`server/pairwiseEngine.ts`) an
 Form2Fact enforces an architectural invariant across all layers:
 - The AI inference engine and deterministic rules engine **never** mutate application approval status to `Approved` or `Rejected`.
 - All automated outputs are persisted as `findings` with initial state `Open`.
-- Transitioning an institutional application status requires an explicit, authenticated, role-authorized human POST to `/api/applications/:id/decision` by an authorized reviewer.
+- Transitioning an institutional application status requires an explicit, authenticated, role-authorized human POST to `/api/v1/applications/:id/decision` by an authorized reviewer.
 - Every decision captures reviewer identity, cryptographic timestamp, and statutory rationale in the append-only `application_decisions` and `audit_events` tables.
 
 ---
 
 ## 8. Summary Assessment
 
-The architecture satisfies high cohesion and low coupling principles. Clear interface boundaries (`IStorageProvider`, `IJobQueue`, `DomainPack`) shield the scrutiny workflow from low-level storage and inference implementations.
+The architecture satisfies high cohesion and low coupling principles. Interface boundaries cleanly separate concerns, with explicit fallback tracking and strictly enforced human-in-the-loop decision boundaries.

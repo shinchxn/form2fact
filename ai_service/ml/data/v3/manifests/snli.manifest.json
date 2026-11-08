@@ -1,0 +1,39 @@
+{
+  "dataset_id": "snli",
+  "name": "Stanford Natural Language Inference (SNLI)",
+  "source": "https://huggingface.co/datasets/stanfordnlp/snli",
+  "repository_id": "stanfordnlp/snli",
+  "revision": "cdb5c3d5eed6ead6e5a341c8e56e669bb666725b",
+  "download_date": "2026-11-07T02:47:01Z",
+  "licence": "CC BY-SA 4.0",
+  "commercial_use_permitted": true,
+  "primary_task": "Natural Language Inference (3-class: entailment, neutral, contradiction)",
+  "acquisition_scope": "Full distribution (train, validation, test)",
+  "files": [
+    {
+      "filename": "validation-00000-of-00001.parquet",
+      "relative_path": "snli\\validation-00000-of-00001.parquet",
+      "size_bytes": 413157,
+      "sha256": "00f5ed8deaed007fef3022f0215b287efbab815b1bb31ac3f3ff4f4129d41ffe",
+      "record_count": 10000,
+      "format": "parquet"
+    },
+    {
+      "filename": "test-00000-of-00001.parquet",
+      "relative_path": "snli\\test-00000-of-00001.parquet",
+      "size_bytes": 411531,
+      "sha256": "4696deda851c4d2385f26b58f2e13f9ed9f08ea7b42a3f4c2b97a9d08448878c",
+      "record_count": 10000,
+      "format": "parquet"
+    },
+    {
+      "filename": "train-00000-of-00001.parquet",
+      "relative_path": "snli\\train-00000-of-00001.parquet",
+      "size_bytes": 19614612,
+      "sha256": "ef9a7b25d97390a62aeda7abe26aec8640600f50b818eaeb9107097d60ac6620",
+      "record_count": 550152,
+      "format": "parquet"
+    }
+  ],
+  "total_records": 570152
+}

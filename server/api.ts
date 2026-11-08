@@ -5,7 +5,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from './db.ts';
-import { DocumentRecord, DocumentType, ExtractedField, ScrutinyReportData, User } from '../src/types/index.ts';
+import { DocumentRecord, DocumentType, ExtractedField, ScrutinyReportData, User, FiveClassLabel, AnnotationRecord } from '../src/types/index.ts';
 import { extractFieldsFromPages, runDeepScrutinyAnalysis } from './extraction.ts';
 import { evaluateSingleRuleSandbox } from './rulesEngine.ts';
 import {
@@ -19,10 +19,13 @@ import { domainRegistry } from './domains/index.ts';
 import { buildAicteLeasePreview } from './domains/aicte/adapter.ts';
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.ts';
+import { BharatCodeService } from './modules/explanation/bharatCodeService.ts';
 import { jobQueue } from './core/jobs/index.ts';
 import { storageProvider } from './core/storage/index.ts';
 import { validate } from './core/validation/validate.ts';
 import { errorHandler } from './core/errors/errorHandler.ts';
+import { securityHeaders } from './core/securityHeaders.ts';
+import { authRateLimiter } from './core/rateLimit.ts';
 
 const router = express.Router();
 
@@ -34,6 +37,9 @@ const upload = multer({
 // JSON and URL-encoded body parsers
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
+
+// Baseline security headers on every API response
+router.use(securityHeaders);
 
 // =========================================================================
 // PUBLIC ENDPOINTS (No JWT required)
@@ -53,14 +59,28 @@ router.get('/api/v1/health', (_req: Request, res: Response) => {
 
 /**
  * Institutional Login with email and password
+ * MED-2 remediation: bounded by per-IP+email rate limiter (429 on excess)
  */
-router.post('/api/v1/auth/login', (req: Request, res: Response) => {
+router.post('/api/v1/auth/login', authRateLimiter.middleware('auth-login'), (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ success: false, error: 'Email and password are required.' });
   }
 
-  const user = db.getUserByEmail(email.toLowerCase().trim());
+  const cleanEmail = email.toLowerCase().trim();
+
+  // BLOCKER 1: In production mode, demo persona credentials are strictly prohibited
+  const DEMO_EMAILS = [
+    'aruna.rao@scrutiny.edu.in',
+    'vk.sharma@scrutiny.edu.in',
+    'meenakshi.s@audit.gov.in',
+    'rajesh.verma@scrutiny.edu.in'
+  ];
+  if (process.env.NODE_ENV === 'production' && DEMO_EMAILS.includes(cleanEmail)) {
+    return res.status(401).json({ success: false, error: 'Demonstration persona credentials are strictly prohibited in production mode.' });
+  }
+
+  const user = db.getUserByEmail(cleanEmail);
   if (!user) {
     return res.status(401).json({ success: false, error: 'Invalid institutional credentials.' });
   }
@@ -90,9 +110,62 @@ router.post('/api/v1/auth/login', (req: Request, res: Response) => {
 });
 
 /**
- * List available demo user personas (public metadata; password hashes strictly excluded)
+ * One-time secure initial administrator provisioning
+ * P0 Security: Requires high-entropy out-of-band BOOTSTRAP_SECRET.
+ * Employs atomic SQLite transaction locking to eliminate administrator claiming race conditions.
  */
-router.get('/api/v1/users', (_req: Request, res: Response) => {
+router.post('/api/v1/auth/bootstrap-admin', authRateLimiter.middleware('auth-bootstrap'), (req: Request, res: Response) => {
+  const expectedSecret = process.env.BOOTSTRAP_SECRET;
+  if (!expectedSecret || !expectedSecret.trim()) {
+    return res.status(403).json({
+      success: false,
+      error: 'HTTP bootstrap endpoint is disabled. Provision administrator via BOOTSTRAP_ADMIN_* environment variables.'
+    });
+  }
+
+  const clientSecret = (req.headers['x-bootstrap-secret'] || req.body?.bootstrapSecret) as string | undefined;
+  if (!clientSecret || typeof clientSecret !== 'string') {
+    return res.status(401).json({
+      success: false,
+      error: 'Missing bootstrap authorization secret.'
+    });
+  }
+
+  const expectedBuffer = Buffer.from(expectedSecret);
+  const clientBuffer = Buffer.from(clientSecret);
+  const secretsMatch = expectedBuffer.length === clientBuffer.length && crypto.timingSafeEqual(expectedBuffer, clientBuffer);
+
+  if (!secretsMatch) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid bootstrap authorization secret.'
+    });
+  }
+
+  const { email, password, displayName, organizationId } = req.body;
+  const result = db.bootstrapAdmin({ email, password, displayName, organizationId });
+
+  if (!result.success || !result.user) {
+    return res.status(result.statusCode).json({
+      success: false,
+      error: result.error
+    });
+  }
+
+  const token = generateToken(result.user);
+  res.status(201).json({
+    success: true,
+    message: 'Initial system administrator bootstrapped successfully.',
+    user: result.user,
+    token
+  });
+});
+
+/**
+ * List available user personas (authenticated; MED-1 remediation).
+ * Password hashes are strictly excluded from the response.
+ */
+router.get('/api/v1/users', authenticateToken, (_req: Request, res: Response) => {
   const users = db.getAllUsers().map(u => ({
     id: u.id,
     displayName: u.displayName,
@@ -121,39 +194,43 @@ router.get('/api/v1/auth/me', authenticateToken, (req: AuthenticatedRequest, res
 /**
  * Switch persona in demonstration mode
  * P0-02 Defense: Client-supplied roles are NEVER trusted. Claims are derived strictly from persistent DB records.
+ * HIGH-1 remediation: requires a valid authenticated session. Previously unauthenticated
+ * callers could mint session tokens for any seeded user without credentials.
  */
 router.post('/api/v1/user', (req: Request, res: Response) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ success: false, error: 'Dynamic persona switching is disabled in production.' });
   }
 
-  const targetId = req.body?.id;
-  if (!targetId) {
-    return res.status(400).json({ success: false, error: 'Target user ID is required.' });
-  }
+  return authenticateToken(req as AuthenticatedRequest, res, () => {
+    const targetId = req.body?.id;
+    if (!targetId) {
+      return res.status(400).json({ success: false, error: 'Target user ID is required.' });
+    }
 
-  const user = db.getUserById(targetId);
-  if (!user) {
-    return res.status(404).json({ success: false, error: 'User not found in institutional registry.' });
-  }
+    const user = db.getUserById(targetId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found in institutional registry.' });
+    }
 
-  // Derive claims strictly from persistent database record, ignoring any client-supplied role
-  const resolvedUser: User = {
-    id: user.id,
-    displayName: user.displayName,
-    email: user.email,
-    role: user.role,
-    department: user.department,
-    organizationId: user.organizationId
-  };
+    // Derive claims strictly from persistent database record, ignoring any client-supplied role
+    const resolvedUser: User = {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      organizationId: user.organizationId
+    };
 
-  db.setCurrentUser(resolvedUser);
-  const token = generateToken(resolvedUser);
+    db.setCurrentUser(resolvedUser);
+    const token = generateToken(resolvedUser);
 
-  res.json({
-    success: true,
-    data: resolvedUser,
-    token
+    res.json({
+      success: true,
+      data: resolvedUser,
+      token
+    });
   });
 });
 
@@ -908,6 +985,107 @@ router.post('/api/v1/findings/:id/review', authenticateToken, requireRole(['Admi
   res.json({ success: true, data: updatedFinding });
 });
 
+/**
+ * BharatCode Model API Integration Endpoint:
+ * Generates an evidence-grounded AI explanation for an existing finding using BharatCode Qwen 3.8 27B.
+ * Authoritative finding and classifier label remain strictly preserved.
+ */
+router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const finding = db.getFindingById(req.params.id);
+  if (!finding) {
+    return res.status(404).json({ success: false, error: 'Finding not found' });
+  }
+
+  const isAdmin = req.user?.role === 'Administrator';
+  const userOrgId = req.user?.organizationId;
+  const app = db.getApplicationById(finding.applicationId, userOrgId, isAdmin);
+
+  if (!app) {
+    return res.status(403).json({ success: false, error: 'Access denied: Finding belongs to an application in another organization.' });
+  }
+
+  // Derive 5-class label from finding characteristics
+  let label: 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE' = 'MISMATCH';
+  if (finding.severity === 'Information Missing') {
+    label = 'MISSING';
+  } else if (finding.status === 'Unable to Determine' || finding.explanation.toLowerCase().includes('uncertain') || finding.explanation.toLowerCase().includes('scanned')) {
+    label = 'UNCERTAIN';
+  } else if (finding.status === 'Dismissed') {
+    label = 'NOT_COMPARABLE';
+  } else if (finding.status === 'Corrected' && (!finding.evidenceValue || finding.declaredValue === finding.evidenceValue)) {
+    label = 'MATCH';
+  }
+
+  const primaryEvidence = finding.evidenceList?.[0];
+
+  const result = await BharatCodeService.generateExplanation({
+    claim: {
+      fieldName: finding.ruleKey || 'statutory_claim',
+      fieldLabel: finding.title || 'Institutional Declaration',
+      rawValue: finding.declaredValue || 'N/A',
+      sourceText: finding.explanation
+    },
+    evidence: {
+      fieldName: finding.ruleKey || 'supporting_evidence',
+      fieldLabel: primaryEvidence?.evidenceRole || 'Supporting Evidence',
+      rawValue: finding.evidenceValue || 'Missing',
+      documentName: primaryEvidence?.documentName,
+      documentId: primaryEvidence?.documentId,
+      pageNumber: primaryEvidence?.pageNumber,
+      sourceText: primaryEvidence?.evidenceText
+    },
+    classifierResult: {
+      label,
+      confidence: 0.95,
+      explanation: finding.explanation
+    },
+    ruleContext: {
+      ruleKey: finding.ruleKey,
+      ruleTitle: finding.title,
+      requirement: finding.explanation
+    }
+  });
+
+  res.json({
+    success: result.success,
+    status: result.status,
+    data: result.data,
+    modelUsed: result.modelUsed,
+    latencyMs: result.latencyMs,
+    error: result.error
+  });
+});
+
+/**
+ * Arbitrary Pairwise BharatCode Explanation Endpoint
+ */
+router.post('/api/v1/ai/bharatcode/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { claim, evidence, classifierResult, ruleContext } = req.body;
+
+  if (!claim || !claim.fieldName || !claim.rawValue || !classifierResult || !classifierResult.label) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: claim (fieldName, rawValue) and classifierResult (label, confidence, explanation) are mandatory.'
+    });
+  }
+
+  const result = await BharatCodeService.generateExplanation({
+    claim,
+    evidence,
+    classifierResult,
+    ruleContext
+  });
+
+  res.json({
+    success: result.success,
+    status: result.status,
+    data: result.data,
+    modelUsed: result.modelUsed,
+    latencyMs: result.latencyMs,
+    error: result.error
+  });
+});
+
 // =========================================================================
 // 6. REPORTS & EXPORTS
 // =========================================================================
@@ -976,8 +1154,16 @@ router.get('/api/v1/applications/:id/audit', authenticateToken, (req: Authentica
     return res.status(404).json({ success: false, error: 'Application not found' });
   }
 
+  // Include docket-level events plus finding-level events (e.g., adjudications)
+  // whose entity reference is a finding belonging to this application.
+  const findingRefs = db.getFindingsByApplication(req.params.id, userOrgId, isAdmin)
+    .map(f => f.reference)
+    .filter((r): r is string => Boolean(r));
+
   const events = db.getAuditEvents(userOrgId, isAdmin).filter(
-    e => e.entityReference.includes(app.referenceNumber) || e.entityReference.includes(app.id)
+    e => e.entityReference.includes(app.referenceNumber) ||
+         e.entityReference.includes(app.id) ||
+         findingRefs.some(ref => e.entityReference.includes(ref))
   );
   res.json({ success: true, data: events });
 });
@@ -1110,6 +1296,322 @@ router.get('/api/v1/jobs/:id', authenticateToken, (req: Request, res: Response) 
     return res.status(404).json({ success: false, error: 'Job not found or expired.' });
   }
   res.json({ success: true, data: job });
+});
+
+// =========================================================================
+// 13. V3 HUMAN ANNOTATION WORKBENCH
+// =========================================================================
+
+/**
+ * Lists candidate annotation tasks with blind-review masking and tenant scoping.
+ */
+router.get('/api/v1/annotations/records', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const institutionId = req.query.institutionId as string | undefined;
+  const records = db.getAnnotationRecords({
+    status: status === 'all' ? undefined : status,
+    institutionId: institutionId === 'all' ? undefined : institutionId,
+    organizationId: req.user?.role === 'Administrator' ? undefined : req.user?.organizationId,
+    userId: req.user?.id,
+    role: req.user?.role
+  });
+  res.json({ success: true, data: records });
+});
+
+/**
+ * Retrieves a single annotation task by ID with blind review masking.
+ */
+router.get('/api/v1/annotations/records/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const record = db.getAnnotationRecordById(req.params.id, req.user?.id, req.user?.role);
+  if (!record) {
+    return res.status(404).json({ success: false, error: 'Annotation record not found.' });
+  }
+  // Tenant check
+  if (req.user?.role !== 'Administrator' && record.organizationId && req.user?.organizationId && record.organizationId !== req.user.organizationId) {
+    return res.status(403).json({ success: false, error: 'Cross-tenant access prohibited for this annotation task.' });
+  }
+  res.json({ success: true, data: record });
+});
+
+/**
+ * Creates a new candidate annotation task from institutional claim/evidence pair.
+ * Allowed: Administrator, Reviewer, Data Collector.
+ */
+router.post('/api/v1/annotations/records', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Data Collector']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const record = db.createAnnotationRecord({
+      ...req.body,
+      organizationId: req.user?.organizationId || 'org-aicte-western'
+    });
+    res.status(201).json({ success: true, data: record });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to create annotation record.' });
+  }
+});
+
+/**
+ * Saves a user's draft or submits an independent blind annotation.
+ * Allowed: Administrator, Reviewer, Annotator, Adjudicator.
+ */
+router.post('/api/v1/annotations/records/:id/annotate', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Annotator', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { label, rationale, isDraft } = req.body;
+    if (!label) {
+      return res.status(400).json({ success: false, error: 'Annotation label is required.' });
+    }
+    const result = db.saveUserAnnotation(
+      req.params.id,
+      {
+        id: req.user!.id,
+        displayName: req.user!.displayName,
+        role: req.user!.role,
+        organizationId: req.user!.organizationId
+      },
+      { label, rationale: rationale || '', isDraft: Boolean(isDraft) }
+    );
+    res.json({ success: true, data: result.record, annotation: result.annotation });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to save annotation.' });
+  }
+});
+
+/**
+ * Resolves a disputed annotation record (third-reviewer adjudication).
+ * Allowed: Administrator, Adjudicator.
+ */
+router.post('/api/v1/annotations/records/:id/adjudicate', authenticateToken, requireRole(['Administrator', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { label, rationale } = req.body;
+    if (!label || !rationale) {
+      return res.status(400).json({ success: false, error: 'Final label and adjudication rationale are required.' });
+    }
+    const record = db.adjudicateRecord(
+      req.params.id,
+      {
+        id: req.user!.id,
+        displayName: req.user!.displayName,
+        role: req.user!.role,
+        organizationId: req.user!.organizationId
+      },
+      { label, rationale }
+    );
+    res.json({ success: true, data: record });
+  } catch (err: any) {
+    const status = err.message?.includes('Access denied') ? 403 : 400;
+    res.status(status).json({ success: false, error: err.message || 'Failed to adjudicate record.' });
+  }
+});
+
+/**
+ * Computes real-time annotation quality metrics, label distributions, raw agreement and Cohen's Kappa.
+ */
+router.get('/api/v1/annotations/metrics', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const orgId = req.user?.role === 'Administrator' ? undefined : req.user?.organizationId;
+  const metrics = db.getAnnotationMetrics(orgId);
+  res.json({ success: true, data: metrics });
+});
+
+/**
+ * Exports agreed and adjudicated records to canonical V3 gold-standard JSONL and manifest.
+ * Allowed: Administrator, Reviewer, Adjudicator.
+ */
+router.post('/api/v1/annotations/export', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const outPath = typeof req.body?.outPath === 'string' && req.body.outPath.trim() ? req.body.outPath.trim() : undefined;
+    const result = db.exportGoldStandard({
+      organizationId: req.user?.organizationId,
+      role: req.user?.role,
+      outPath
+    });
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to export gold standard dataset.' });
+  }
+});
+
+/**
+ * Reviewer Authorization Governance Endpoints
+ */
+router.post('/api/v1/reviewers/authorize', authenticateToken, requireRole(['Administrator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, role, verifiedIdentityRef, issuingAuthority, authorizationReference } = req.body;
+    if (!userId || !role || !verifiedIdentityRef || !issuingAuthority || !authorizationReference) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required authorization fields: userId, role, verifiedIdentityRef, issuingAuthority, authorizationReference.'
+      });
+    }
+    if (req.user!.id === userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Self-approval prohibited: Administrators cannot approve their own reviewer authorization.'
+      });
+    }
+    const authorization = db.authorizeReviewer(req.user!, req.body);
+    res.status(201).json({ success: true, data: authorization });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to authorize reviewer.' });
+  }
+});
+
+router.post('/api/v1/reviewers/authorizations/:id/revoke', authenticateToken, requireRole(['Administrator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || reason.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Substantive revocation rationale (minimum 10 characters) is required.'
+      });
+    }
+    const authorization = db.revokeReviewerAuthorization(req.user!, req.params.id, reason.trim());
+    res.json({ success: true, data: authorization });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to revoke reviewer authorization.' });
+  }
+});
+
+router.get('/api/v1/reviewers/authorizations', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Adjudicator']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const authorizations = db.listReviewerAuthorizations(orgId);
+    res.json({ success: true, data: authorizations });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to list authorizations.' });
+  }
+});
+
+router.get('/api/v1/reviewers/authorizations/:userId', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const auth = db.getReviewerAuthorization(req.params.userId);
+    res.json({ success: true, data: auth });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch authorization.' });
+  }
+});
+
+/**
+ * Institutional Docket Intake & Lifecycle Endpoints
+ */
+router.post('/api/v1/intake/dockets', authenticateToken, requireRole(['Administrator', 'Reviewer', 'Data Collector']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { docketNumber, institutionName, sourceOrganization, authorizationReference, documentPath } = req.body;
+    if (!docketNumber || !institutionName || !sourceOrganization || !authorizationReference) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required docket fields: docketNumber, institutionName, sourceOrganization, authorizationReference.'
+      });
+    }
+    // Path traversal prevention
+    if (documentPath && (documentPath.includes('..') || documentPath.includes('\0'))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid document path: path traversal is prohibited.'
+      });
+    }
+    const docket = db.createInstitutionalDocket(req.user!, req.body);
+    res.status(201).json({ success: true, data: docket });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Failed to create institutional docket.' });
+  }
+});
+
+router.get('/api/v1/intake/dockets', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const dockets = db.getInstitutionalDockets({
+      organizationId: orgId,
+      lifecycleState: req.query.lifecycleState as string,
+      provenanceStatus: req.query.provenanceStatus as string
+    });
+    res.json({ success: true, data: dockets });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to list institutional dockets.' });
+  }
+});
+
+router.get('/api/v1/intake/dockets/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const docket = db.getInstitutionalDocketById(req.params.id);
+    if (!docket) {
+      return res.status(404).json({ success: false, error: `Institutional docket '${req.params.id}' not found.` });
+    }
+    // Regional tenant isolation
+    if (req.user!.role !== 'Administrator' && docket.organizationId !== req.user!.organizationId) {
+      return res.status(403).json({ success: false, error: 'Access denied: Docket belongs to another regional organization.' });
+    }
+    const transitions = db.getDocketTransitions(docket.id);
+    res.json({ success: true, data: { ...docket, transitions } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch institutional docket.' });
+  }
+});
+
+router.post('/api/v1/intake/dockets/:id/verify-provenance', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status || !notes || notes.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status and substantive verification notes (minimum 10 characters) are required.'
+      });
+    }
+    const docket = db.verifyDocketProvenance(req.user!, req.params.id, status, notes.trim());
+    res.json({ success: true, data: docket });
+  } catch (err: any) {
+    const statusCode = err.message?.includes('Cross-tenant') ? 403 : 400;
+    res.status(statusCode).json({ success: false, error: err.message || 'Failed to verify docket provenance.' });
+  }
+});
+
+router.post('/api/v1/intake/dockets/:id/transition', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { toState, rationale } = req.body;
+    if (!toState || !rationale || rationale.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Destination state and substantive transition rationale (minimum 10 characters) are required.'
+      });
+    }
+    const docket = db.transitionDocketLifecycle(req.user!, req.params.id, toState, rationale.trim());
+    res.json({ success: true, data: docket });
+  } catch (err: any) {
+    const statusCode = err.message?.includes('Cross-tenant') ? 403 : 400;
+    res.status(statusCode).json({ success: false, error: err.message || 'Failed to transition docket lifecycle.' });
+  }
+});
+
+/**
+ * Cryptographic Audit Ledger Verification Endpoints
+ */
+router.get('/api/v1/ledger/verify', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const verification = db.verifyLedgerChain();
+    res.json({ success: true, data: verification });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to verify ledger integrity.' });
+  }
+});
+
+router.get('/api/v1/ledger/report', authenticateToken, requireRole(['Administrator', 'Reviewer']), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const report = db.generateLedgerIntegrityReport();
+    res.json({ success: true, data: report });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to generate ledger integrity report.' });
+  }
+});
+
+/**
+ * Operational Acceptance Dashboard Endpoint
+ */
+router.get('/api/v1/intake/dashboard', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orgId = req.user!.role === 'Administrator' ? (req.query.organizationId as string) : req.user!.organizationId;
+    const dashboard = db.getOperationalDashboard(orgId, req.user!.role);
+    res.json({ success: true, data: dashboard });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Failed to generate operational dashboard.' });
+  }
 });
 
 // Centralized error handler

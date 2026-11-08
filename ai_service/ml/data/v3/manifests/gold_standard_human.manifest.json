@@ -1,0 +1,21 @@
+{
+  "dataset_id": "gold_standard_human",
+  "name": "Form2Fact V3 AICTE Gold-Standard Human Annotation Corpus",
+  "export_timestamp": "2026-11-07T04:20:00.000Z",
+  "record_count": 0,
+  "rejection_count": 0,
+  "file": {
+    "filename": "gold_standard_human.jsonl",
+    "relative_path": "ai_service/ml/data/v3/annotations/gold_standard_human.jsonl",
+    "size_bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "quality_invariants": {
+    "is_synthetic": false,
+    "is_human_annotated": true,
+    "adjudication_required_for_disagreements": true,
+    "blind_review_enforced": true,
+    "rejection_gate_active": true
+  },
+  "status_note": "Awaiting authorized institutional human annotations. Zero records collected or exported to date."
+}

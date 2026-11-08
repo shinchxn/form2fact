@@ -2,7 +2,13 @@ export type ApplicationStatus = 'Uploaded' | 'Extracting' | 'Validating' | 'Read
 export type ReviewStatus = 'Pending Review' | 'Under Review' | 'Review Completed' | 'Discrepancies Confirmed';
 export type FindingSeverity = 'Attention Required' | 'Material Discrepancy' | 'Information Missing' | 'Administrative Advisory';
 export type FindingStatus = 'Open' | 'Under Review' | 'Confirmed' | 'Dismissed' | 'Corrected' | 'Unable to Determine';
-export type UserRole = 'Administrator' | 'Reviewer' | 'Read-only Viewer';
+export type UserRole =
+  | 'Administrator'
+  | 'Reviewer'
+  | 'Read-only Viewer'
+  | 'Data Collector'
+  | 'Annotator'
+  | 'Adjudicator';
 
 export interface User {
   id: string;
@@ -11,6 +17,7 @@ export interface User {
   role: UserRole;
   department: string;
   organizationId?: string;
+  createdAt?: string;
 }
 
 export interface DeclaredDetails {
@@ -189,15 +196,104 @@ export interface ReviewAction {
 
 export interface AuditEvent {
   id: string;
+  sequenceNumber?: number;
   timestamp: string;
   actorId: string;
   actorName: string;
+  actorRole?: string;
+  organizationId?: string;
   action: string;
-  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report';
+  entityType: 'Application' | 'Document' | 'ExtractedField' | 'Finding' | 'Rule' | 'Report' | 'User' | 'AnnotationRecord' | 'UserAnnotation' | 'ReviewerAuthorization' | 'InstitutionalDocket' | 'System';
   entityReference: string;
-  beforeValue?: string;
-  afterValue?: string;
-  note?: string;
+  beforeValue?: string | null;
+  afterValue?: string | null;
+  note?: string | null;
+  payloadHash?: string;
+  previousHash?: string;
+  currentHash?: string;
+}
+
+export type FiveClassLabel = 'MATCH' | 'MISMATCH' | 'MISSING' | 'UNCERTAIN' | 'NOT_COMPARABLE';
+
+export type AnnotationRecordStatus = 'pending' | 'in_review' | 'agreed' | 'disputed' | 'adjudicated';
+
+export interface UserAnnotation {
+  id: string;
+  recordId: string;
+  annotatorId: string;
+  annotatorName: string;
+  annotatorRole: string;
+  label: FiveClassLabel;
+  rationale: string;
+  isDraft: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationRecord {
+  id: string;
+  recordId: string;
+  institutionId: string;
+  institutionName: string;
+  applicationId?: string;
+  claimFieldName: string;
+  claimText: string;
+  claimDocumentId?: string;
+  claimDocumentName?: string;
+  claimPage?: number;
+  evidenceText: string;
+  evidenceDocumentId?: string;
+  evidenceDocumentName?: string;
+  evidencePage?: number;
+  evidenceLocation?: string;
+  normalizedClaimValue?: string;
+  normalizedEvidenceValue?: string;
+  fieldCategory?: string;
+  sourceProvenance: string;
+  isDemoCandidate?: boolean;
+  licence?: string;
+  originalSourceLabel?: string;
+  status: AnnotationRecordStatus;
+  finalLabel?: FiveClassLabel;
+  adjudicatorId?: string;
+  adjudicatorName?: string;
+  adjudicationRationale?: string;
+  adjudicatedAt?: string;
+  organizationId: string;
+  userAnnotations?: UserAnnotation[];
+  myAnnotation?: UserAnnotation;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationMetrics {
+  totalRecords: number;
+  completedRecords: number;
+  pendingRecords: number;
+  inReviewRecords: number;
+  agreedRecords: number;
+  disputedRecords: number;
+  adjudicatedRecords: number;
+  labelDistribution: Record<FiveClassLabel, number>;
+  rawAgreementRate: number;
+  cohensKappa: number | null;
+  cohensKappaInterpretation: string;
+  po: number | null;
+  pe: number | null;
+  pairedCount: number;
+  distinctAnnotatorsCount: number;
+  excludedPairsCount: number;
+  undefinedReason: string | null;
+  isSampleSizeSufficient: boolean;
+  categoryDistribution: Record<FiveClassLabel, {
+    annotator1: number;
+    annotator2: number;
+    total: number;
+  }>;
+  adjudicationRate: number;
+  missingEvidenceRate: number;
+  invalidRecordRate: number;
+  institutionDistribution: Record<string, number>;
 }
 
 export interface ValidationSummary {
@@ -219,4 +315,94 @@ export interface ScrutinyReportData {
   validationSummary: ValidationSummary;
   generatedAt: string;
   generatedBy: string;
+}
+
+export interface ReviewerAuthorization {
+  id: string;
+  userId: string;
+  userDisplayName?: string;
+  userEmail?: string;
+  role: UserRole;
+  organizationId: string;
+  verifiedIdentityRef: string;
+  issuingAuthority: string;
+  professionalDesignation?: string;
+  authorizationReference: string;
+  approvedBy: string;
+  approvedByName?: string;
+  approvedAt: string;
+  expiryDate?: string | null;
+  isRevoked: boolean;
+  revocationReason?: string | null;
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewerAuthorizationInput {
+  userId: string;
+  role: UserRole;
+  organizationId: string;
+  verifiedIdentityRef: string;
+  issuingAuthority: string;
+  professionalDesignation?: string;
+  authorizationReference: string;
+  expiryDate?: string;
+}
+
+export type InstitutionalDocketLifecycle =
+  | 'DATA_SOURCE_IDENTIFIED'
+  | 'ACCESS_AUTHORIZATION_PENDING'
+  | 'AUTHORIZED_FOR_COLLECTION'
+  | 'DOCUMENT_INGESTED'
+  | 'PROVENANCE_PENDING'
+  | 'PROVENANCE_VERIFIED'
+  | 'ANNOTATION_READY'
+  | 'DOUBLE_ANNOTATION_IN_PROGRESS'
+  | 'ADJUDICATION_PENDING'
+  | 'ADJUDICATED'
+  | 'EXPORT_ELIGIBLE'
+  | 'ACCESS_DENIED'
+  | 'PROVENANCE_REJECTED'
+  | 'DEMO_FIXTURE'
+  | 'SYNTHETIC_DATA'
+  | 'QUARANTINED';
+
+export interface InstitutionalDocket {
+  id: string;
+  docketNumber: string;
+  institutionId: string;
+  institutionName: string;
+  sourceOrganization: string;
+  sourceUrl?: string | null;
+  retrievalDate: string;
+  publicationDate?: string | null;
+  authorizationReference: string;
+  documentChecksum: string;
+  documentPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  pageCount: number;
+  organizationId: string;
+  documentClassification: 'statutory_filing' | 'inspection_report' | 'tribunal_order' | 'public_disclosure' | 'demo_fixture';
+  provenanceStatus: 'PROVENANCE_PENDING' | 'PROVENANCE_VERIFIED' | 'PROVENANCE_REJECTED';
+  lifecycleState: InstitutionalDocketLifecycle;
+  verifiedBy?: string | null;
+  verifiedAt?: string | null;
+  verificationNotes?: string | null;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocketTransitionEvent {
+  id: string;
+  docketId: string;
+  fromState: InstitutionalDocketLifecycle;
+  toState: InstitutionalDocketLifecycle;
+  actorId: string;
+  actorName: string;
+  rationale: string;
+  timestamp: string;
 }

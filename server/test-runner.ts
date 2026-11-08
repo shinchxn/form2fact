@@ -590,9 +590,13 @@ assert(resHealth.status === 200, 'Public /api/v1/health accessible without token
 const healthBody = await resHealth.json();
 assert(healthBody.status === 'ok', 'Health endpoint reports status ok');
 
-// 6. Public personas metadata accessible without token and excludes password hashes
-const resUsers = await fetch(`${baseUrl}/api/v1/users`);
-assert(resUsers.status === 200, 'Public /api/v1/users accessible without token');
+// 6. MED-1 remediation: user registry requires authentication (no public enumeration)
+const resUsersUnauth = await fetch(`${baseUrl}/api/v1/users`);
+assert(resUsersUnauth.status === 401, 'Unauthenticated /api/v1/users rejected with 401 (no user enumeration)');
+const resUsers = await fetch(`${baseUrl}/api/v1/users`, {
+  headers: { Authorization: `Bearer ${validToken}` }
+});
+assert(resUsers.status === 200, 'Authenticated /api/v1/users accessible with valid token');
 const usersBody = await resUsers.json();
 assert(Array.isArray(usersBody.data), 'Users endpoint returns array of users');
 assert(!usersBody.data.some((u: any) => u.passwordHash), 'User personas strictly exclude password hashes');
@@ -607,13 +611,21 @@ assert(resAuthed.status === 200, 'Protected endpoint succeeds with valid JWT tok
 // 19. P0-02: USER REGISTRATION & ROLE ESCALATION DEFENSE
 // =========================================================================
 console.log('\n[19] Testing P0-02 (User Registration & Role Escalation Defense)...');
+// 0. HIGH-1 remediation: persona switch is NOT unauthenticated (no anonymous JWT minting)
+const resSwitchUnauth = await fetch(`${baseUrl}/api/v1/user`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: 'usr-002', role: 'Administrator' })
+});
+assert(resSwitchUnauth.status === 401, 'Unauthenticated persona switch rejected with 401 (no anonymous JWT minting)');
+
 // 1. Client-supplied role in POST /api/v1/user is ignored and strictly derived from DB
 const resSwitch = await fetch(`${baseUrl}/api/v1/user`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${validToken}` },
   body: JSON.stringify({ id: 'usr-001', role: 'Administrator' }) // Attacker attempts to claim Administrator!
 });
-assert(resSwitch.status === 200, 'Switch user endpoint succeeds for valid registered user');
+assert(resSwitch.status === 200, 'Switch user endpoint succeeds for authenticated session');
 const switchBody = await resSwitch.json();
 assert(switchBody.data.role === 'Reviewer', 'Client-supplied role Administrator was ignored; DB role Reviewer preserved');
 const switchedDecoded = verifyToken(switchBody.token);
@@ -622,7 +634,7 @@ assert(switchedDecoded?.role === 'Reviewer', 'Token claims strictly derived from
 // 2. Non-existent user ID rejected
 const resFakeUser = await fetch(`${baseUrl}/api/v1/user`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${validToken}` },
   body: JSON.stringify({ id: 'usr-fake-attacker', role: 'Administrator' })
 });
 assert(resFakeUser.status === 404, 'Arbitrary non-existent user rejected with 404');

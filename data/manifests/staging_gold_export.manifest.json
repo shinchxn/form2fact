@@ -1,0 +1,22 @@
+{
+  "dataset_id": "gold_standard_human",
+  "name": "Form2Fact V3 AICTE Gold-Standard Human Annotation Corpus",
+  "export_timestamp": "2026-11-08T04:31:19.930Z",
+  "record_count": 2,
+  "rejection_count": 0,
+  "file": {
+    "filename": "staging_gold_export.jsonl",
+    "relative_path": "data/staging_rehearsal/staging_gold_export.jsonl",
+    "size_bytes": 1741,
+    "sha256": "09245d5fd1652c104519afa2692bbdc12e6020f78c3cb4b1826f2d15f1a25492"
+  },
+  "quality_invariants": {
+    "is_synthetic": false,
+    "is_human_annotated": true,
+    "adjudication_required_for_disagreements": true,
+    "blind_review_enforced": true,
+    "rejection_gate_active": true,
+    "fifteen_firewall_gates_enforced": true,
+    "ledger_hash_chain_verified": true
+  }
+}

@@ -11,6 +11,7 @@ import { AictePreviewView } from './components/AictePreviewView.tsx';
 import { ReportsView } from './components/ReportsView.tsx';
 import { AuditLogView } from './components/AuditLogView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
+import { AnnotationWorkbenchView } from './components/AnnotationWorkbenchView.tsx';
 import { NewApplicationModal } from './components/NewApplicationModal.tsx';
 import { CorrectionModal } from './components/CorrectionModal.tsx';
 import { ReviewActionModal } from './components/ReviewActionModal.tsx';
@@ -300,6 +301,13 @@ export default function App() {
                   </div>
                   <PairwiseComparator />
                 </div>
+              )}
+
+              {currentView === 'annotations' && (
+                <AnnotationWorkbenchView
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                />
               )}
 
               {currentView === 'applications' && (

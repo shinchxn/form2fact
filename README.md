@@ -14,13 +14,22 @@
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4.3-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![SQLite](https://img.shields.io/badge/SQLite-Native_Node24-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose_Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![BharatCode Build League 2026](https://img.shields.io/badge/BharatCode_Build_League-2026_Submission-FF6F00?logo=target&logoColor=white)](BharatCode.txt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **From Institutional Claims to Verifiable Statutory Evidence.**
 
-[Live Application](http://localhost:3000) • [Architecture](#7-system-architecture) • [Workflow](#8-application-workflow) • [API Documentation](#15-api-documentation) • [Installation](#13-installation-and-setup)
+[Live Application](http://localhost:3000) • [BharatCode Integration](#105-bharatcode-model-api-integration-qwen-38-27b) • [Architecture](#7-system-architecture) • [Workflow](#8-application-workflow) • [API Documentation](#15-api-documentation) • [Installation](#13-installation-and-setup)
 
 </div>
+
+---
+
+## BharatCode Build League 2026 Submission
+- **Target Competition:** BharatCode Build League 2026 (`https://auth.bharatcode.ai/build`)
+- **Recommended Category:** **Work & automation** (Cognitive Document Intelligence & Regulatory Scrutiny Automation)
+- **Model API Integration:** BharatCode Qwen 3.8 27B (`qwen-3.8-27b`) via `https://bharatcode.ai/api/model/v1`
+- **Submission Specification:** Fully documented in root [`BharatCode.txt`](BharatCode.txt) and [`docs/bharatcode/`](docs/bharatcode/).
 
 ---
 
@@ -130,14 +139,14 @@ flowchart TD
         Auth[JWT & RBAC Module]
         Tenant[Multi-Tenant Isolation]
         Rules[Deterministic AICTE Rules Engine]
-        Storage[Storage Provider: Local Disk / MinIO S3]
-        DB[(Persistent SQLite / PostgreSQL)]
+        Storage[Storage Provider: Local Disk (Append-Only)]
+        DB[(Persistent SQLite with WAL)]
     end
 
     subgraph AIService["AI & ML Microservice (FastAPI + PyTorch)"]
         Router[Inference Router]
         Classifier[Calibrated Pairwise Classifier V2]
-        TempScaling[Temperature Scaling Layer T=1.3468]
+        TempScaling[Temperature Scaling Layer T=1.8182]
         OCR[Tesseract / Textract OCR Pipeline]
     end
 
@@ -217,15 +226,39 @@ Form2Fact implements a rigorous five-class pairwise taxonomy for comparing claim
 ### Backend Gateway
 - **Runtime:** Node.js v24 LTS
 - **Framework:** Express (`4.21.2`)
-- **Database:** Native Node 24 SQLite (`node:sqlite` / `DatabaseSync`)
-- **Storage:** `IStorageProvider` (Local Filesystem with path containment defense & MinIO S3)
+- **Database:** Native Node 24 SQLite (`node:sqlite` / `DatabaseSync`) with Write-Ahead Logging (WAL)
+- **Storage:** `IStorageProvider` (Local Filesystem with path containment defense & SHA-256 verification)
 - **Security:** `jsonwebtoken` (v9.0), `bcryptjs` (v3.0), `multer` (v2.5)
 
 ### Machine Learning & OCR Microservice
 - **API Engine:** Python 3.13 / FastAPI (`0.115.x`) with Uvicorn
 - **ML Framework:** PyTorch (`2.6.x`), HuggingFace Transformers, Scikit-learn
-- **Calibration:** Temperature Scaling ($T = 1.3468$) fitted on validation log-likelihood
+- **Calibration:** Temperature Scaling ($T = 1.8182$) fitted on validation log-likelihood ($N = 162$)
 - **OCR Engine:** Tesseract OCR / `pytesseract` with multi-page fallback
+
+### BharatCode Model Reasoning Layer
+- **Model:** BharatCode Qwen 3.8 27B (`qwen-3.8-27b`)
+- **API Base:** `https://bharatcode.ai/api/model/v1`
+- **Service:** `server/modules/explanation/bharatCodeService.ts`
+- **Role:** Evidence-grounded explanation and statutory clause synthesis
+- **Privacy:** Client-side PII redaction (Aadhaar, PAN, phone, email, accounts) prior to transmission
+- **Safeguards:** Hallucination removal filter + Classifier override prevention
+
+---
+
+## 10.5. BharatCode Model API Integration (Qwen 3.8 27B)
+
+Form2Fact integrates the official **BharatCode Model API** (`https://bharatcode.ai/api/model/v1`) using **`qwen-3.8-27b`** to generate evidence-grounded legal reasoning explaining regulatory discrepancies for human scrutiny committees.
+
+### Workflow & Safeguards:
+1. **Local Text Extraction & PII Redaction:** Text snippets from the institutional application and supporting legal documents are extracted locally. Personal identifiers (Aadhaar, PAN, phone numbers, emails, bank accounts) are automatically redacted via `redactPii()` before any outbound call.
+2. **Authoritative Classifier Grounding:** The Form2Fact hybrid classifier output (e.g. `MISMATCH`, 98% confidence) and statutory rule citations are assembled into an evidence-first prompt.
+3. **Reasoning Synthesis:** BharatCode Qwen 3.8 27B generates an objective explanation detailing why the claim and evidence contradict or align.
+4. **Dual Grounding Guards:**
+   - *Hallucination Guard:* Automatically cross-validates citations and strips any cited document name or page number not present in the ingested evidence.
+   - *Classifier Override Guard:* Prohibits the LLM from altering or overriding the classifier label or approving/rejecting an institution.
+5. **Interactive Verification:** The explanation is rendered in the Findings workspace with direct clickable links jumping to the cited document page in the split-screen evidence viewer.
+6. **Graceful Fallback:** If `BHARATCODE_API_KEY` is not configured, the platform preserves deterministic findings without fabricating responses.
 
 ---
 
@@ -235,7 +268,7 @@ All screenshots below are captured directly from the running production applicat
 
 ### 1. Institutional Login Portal
 ![Login Portal](docs/assets/screenshots/01-login.png)
-*Role-based institutional authentication portal with one-click test credentials.*
+*Role-based institutional authentication portal with secure administrative access and JWT sessions.*
 
 ---
 
@@ -312,9 +345,13 @@ form2fact/
 │   ├── db.ts                          # SQLite schema, migrations, and seeding policy
 │   ├── rulesEngine.ts                 # AICTE regulatory compliance rules
 │   ├── core/                          # Enterprise storage, logging, jobs, and errors
-│   ├── modules/verification/          # Pairwise classification engine
+│   ├── modules/
+│   │   ├── explanation/               # BharatCode Qwen 3.8 27B AI reasoning service
+│   │   ├── organizations/             # Regional tenant organization manager
+│   │   └── verification/              # Pairwise classification engine
 │   └── tests/
-│       ├── dataIntegrity.test.ts      # 34-point data integrity test suite
+│       ├── bharatCodeIntegration.test.ts # 12-point BharatCode API verification suite
+│       ├── dataIntegrity.test.ts      # 111-point data integrity test suite
 │       └── test-runner.ts             # 23-scenario regression test harness
 ├── src/                               # React 19 Frontend
 │   ├── App.tsx                        # Master application state router
@@ -330,6 +367,7 @@ form2fact/
 │   └── ocr/                           # OCR textract and tesseract handlers
 ├── sample_documents/                  # Ready-to-test sample institutional PDFs
 ├── docs/                              # Comprehensive engineering documentation
+│   ├── bharatcode/                    # BharatCode Build League 2026 integration & audit reports
 │   ├── assets/screenshots/            # Genuine application screenshots
 │   ├── data-integrity/                # Mock removal and integrity audit reports
 │   └── release/                       # Final verification and release reports
@@ -397,6 +435,12 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `DOCUMENT_STORAGE_PATH` | `./data/dockets` | Custom path | Storage directory for uploaded applicant PDFs. |
 | `AI_SERVICE_URL` | `http://localhost:8000` | `http://ai-service:8000` | Internal URL for pairwise classifier and OCR microservice. |
 | `OCR_SERVICE_TOKEN` | `form2fact_ocr_secret_token_2026` | Secure Secret | Authentication token for internal OCR endpoints. |
+| `BOOTSTRAP_SECRET` | *(disabled)* | Secure Secret | Pre-shared out-of-band secret authorizing initial administrator bootstrap. |
+| `BOOTSTRAP_ADMIN_EMAIL` | *(none)* | Valid email | One-time initial administrator account email on empty database. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | *(none)* | $\ge 12$ chars | One-time initial administrator password (scrubbed from memory immediately). |
+| `BHARATCODE_API_URL` | `https://bharatcode.ai/api/model/v1` | Production URL | Base URL for official BharatCode Model API. |
+| `BHARATCODE_API_KEY` | *(none)* | Secure Token (`bc_live_...`) | Live Bearer API key for generating AI explanations via Qwen 3.8 27B. |
+| `BHARATCODE_MODEL` | `qwen-3.8-27b` | `qwen-3.8-27b` | Active model identifier for evidence-grounded legal explanations. |
 
 ---
 
@@ -407,6 +451,7 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `GET` | `/api/v1/health` | Public | Service health and version status. |
 | `POST` | `/api/v1/auth/login` | Public | Institutional login with email & password. |
 | `GET` | `/api/v1/auth/me` | Authenticated | Revalidate current user session and active role. |
+| `POST` | `/api/v1/auth/bootstrap-admin` | Public (Guarded) | One-time initial administrator creation requiring `BOOTSTRAP_SECRET` on empty database. |
 | `GET` | `/api/v1/applications` | Authenticated | List all regional applications (tenant isolated). |
 | `POST` | `/api/v1/applications` | Reviewer / Admin | Ingest a new institutional application docket. |
 | `GET` | `/api/v1/applications/:id` | Authenticated | Fetch complete docket details, documents, and findings. |
@@ -415,6 +460,8 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `DELETE` | `/api/v1/documents/:id` | Reviewer / Admin | Transactional deletion of document and cascading fields. |
 | `POST` | `/api/v1/verification/pairwise` | Authenticated | Execute pairwise comparison between claim and evidence. |
 | `POST` | `/api/v1/findings/:id/review` | Reviewer / Admin | Record human reviewer adjudication and commit audit event. |
+| `POST` | `/api/v1/findings/:id/explain` | Authenticated | Generate evidence-grounded AI explanation via BharatCode Qwen 3.8 27B. |
+| `POST` | `/api/v1/ai/bharatcode/explain` | Authenticated | Arbitrary claim/evidence pairwise AI explanation with citation verification. |
 | `GET` | `/api/v1/audit` | Authenticated | Retrieve append-only chronological audit log. |
 | `GET` | `/api/v1/rules` | Authenticated | Retrieve AICTE regulatory rules catalog. |
 
@@ -426,7 +473,7 @@ docker compose -f infrastructure/docker-compose.yml up --build
 The Form2Fact Pairwise Classifier (`champion-v2.0`) is a hybrid architecture combining:
 1. **Deterministic Fast-Paths:** Exact date equivalents, numeric tolerance checking, and standard entity abbreviations bypass neural computation with 100% confidence.
 2. **Lexical & Semantic NLP:** DeBERTa/DistilRoBERTa cross-encoder embedding comparing claim strings against extracted evidence spans.
-3. **Temperature Scaling Calibration:** Raw neural logits are calibrated using post-hoc temperature scaling ($T = 1.3468$) fitted exclusively on held-out validation data to ensure predicted probabilities match real empirical accuracy.
+3. **Temperature Scaling Calibration:** Raw neural logits are calibrated using post-hoc temperature scaling ($T = 1.8182$) fitted exclusively on held-out validation data ($N = 162$) to ensure predicted probabilities match real empirical accuracy.
 4. **Abstention Policy:** Any classification where calibrated confidence falls below **0.60** is automatically redirected to `UNCERTAIN` and routed to a human reviewer.
 
 ---
@@ -445,23 +492,29 @@ The Form2Fact Pairwise Classifier (`champion-v2.0`) is a hybrid architecture com
 Form2Fact maintains 100% pass rates across all test suites:
 
 ```bash
-# 1. Run Data Integrity & Zero-Mock Test Suite (34 Assertions)
+# 1. Run Data Integrity & Zero-Mock Test Suite (111 Assertions)
 npm run test:integrity
 
 # 2. Run Express Server & P0 Security Regression Suite (23 Scenarios)
 npm test
 
-# 3. Run Python ML & Calibrated Inference Pytest Suite (28 Tests)
+# 3. Run Python ML & Calibrated Inference Pytest Suite (32 Tests)
 python -m pytest ai_service/ml/tests -v
 
 # 4. Run Python OCR Unit Tests (5 Tests)
-python -m unittest ai_service/tests/test_ocr.py -v
+python -m pytest ai_service/tests/test_ocr.py -v
 
 # 5. Run TypeScript Type Checking
 npm run lint
 
 # 6. Run Production Client Build
 npm run build
+
+# 7. Run BharatCode Model API Integration Suite (12 Tests - 100% Passed)
+node ./node_modules/tsx/dist/cli.mjs server/tests/bharatCodeIntegration.test.ts
+
+# 8. Run V3 Staging Operational Rehearsal & Audit Suite (18 Tests - 100% Passed)
+node ./node_modules/tsx/dist/cli.mjs server/tests/stagingOperationalRehearsal.test.ts
 ```
 
 ---
@@ -478,7 +531,7 @@ npm run build
 ### Completed (v1.2.0)
 - [x] Multi-tenant regional RBAC with JWT token security.
 - [x] AICTE statutory rules catalog (`RULE-TEN-01`, `RULE-NAME-02`, `RULE-AREA-03`, `RULE-DOC-04`).
-- [x] Calibrated pairwise NLP classifier with temperature scaling ($T = 1.3468$).
+- [x] Calibrated pairwise NLP classifier with temperature scaling ($T = 1.8182$).
 - [x] Zero-mock production data integrity cleanup.
 - [x] Coordinated 3-pane document evidence viewer.
 - [x] Append-only tamper-evident audit ledger.

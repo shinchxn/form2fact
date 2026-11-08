@@ -8,6 +8,7 @@ export interface FieldCandidate {
   fieldId?: string;
   documentId?: string;
   documentName?: string;
+  sourceDocumentType?: string;
   fieldName: string;
   fieldLabel: string;
   rawValue: string;
@@ -45,6 +46,9 @@ export interface PairwiseComparisonOutput {
   evidenceList: FindingEvidence[];
   requiresHumanReview: boolean;
   modelVersion: string;
+  inferenceSource?: 'calibrated_ml' | 'deterministic_rule' | 'deterministic_fallback' | 'fast_path';
+  modelStatus?: 'available' | 'unavailable' | 'bypassed';
+  fallbackApplied?: boolean;
 }
 
 export class PairwiseFieldClassifier {
@@ -71,7 +75,10 @@ export class PairwiseFieldClassifier {
         normalizedClaimValue: claim.normalizedValue || claim.rawValue,
         evidenceList: [],
         requiresHumanReview: true,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'deterministic_rule',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
@@ -86,22 +93,25 @@ export class PairwiseFieldClassifier {
         normalizedEvidenceValue: evidence.rawValue,
         evidenceList: [],
         requiresHumanReview: false,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'deterministic_rule',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
     // Build evidence item
     const evidenceItems: FindingEvidence[] = [];
-    if (evidence.documentName && evidence.pageNumber) {
+    if ((evidence.documentName || evidence.documentId || evidence.sourceDocumentType) && evidence.pageNumber) {
       evidenceItems.push({
         id: `ev-${Date.now()}`,
         findingId: '',
         documentId: evidence.documentId || 'unknown-doc',
-        documentName: evidence.documentName,
+        documentName: evidence.documentName || evidence.sourceDocumentType || 'Supporting Document',
         pageNumber: evidence.pageNumber,
         fieldId: evidence.fieldId,
         evidenceText: evidence.sourceText || `Extracted value: ${evidence.rawValue}`,
-        evidenceRole: 'Conflicting Evidence'
+        evidenceRole: 'Primary Supporting Document'
       });
     }
 
@@ -116,7 +126,10 @@ export class PairwiseFieldClassifier {
         normalizedEvidenceValue: evidence.rawValue,
         evidenceList: evidenceItems,
         requiresHumanReview: true,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'deterministic_rule',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
@@ -134,7 +147,10 @@ export class PairwiseFieldClassifier {
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: false,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'fast_path',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
@@ -154,7 +170,10 @@ export class PairwiseFieldClassifier {
             normalizedEvidenceValue: dateEvidence,
             evidenceList: evidenceItems,
             requiresHumanReview: false,
-            modelVersion: this.MODEL_VERSION
+            modelVersion: this.MODEL_VERSION,
+            inferenceSource: 'deterministic_rule',
+            modelStatus: 'bypassed',
+            fallbackApplied: false
           };
         } else {
           return {
@@ -166,7 +185,10 @@ export class PairwiseFieldClassifier {
             normalizedEvidenceValue: dateEvidence,
             evidenceList: evidenceItems,
             requiresHumanReview: true,
-            modelVersion: this.MODEL_VERSION
+            modelVersion: this.MODEL_VERSION,
+            inferenceSource: 'deterministic_rule',
+            modelStatus: 'bypassed',
+            fallbackApplied: false
           };
         }
       }
@@ -189,7 +211,10 @@ export class PairwiseFieldClassifier {
             normalizedEvidenceValue: String(numEvidence),
             evidenceList: evidenceItems,
             requiresHumanReview: false,
-            modelVersion: this.MODEL_VERSION
+            modelVersion: this.MODEL_VERSION,
+            inferenceSource: 'deterministic_rule',
+            modelStatus: 'bypassed',
+            fallbackApplied: false
           };
         } else {
           const delta = Math.abs(numClaim - numEvidence).toFixed(2);
@@ -203,7 +228,10 @@ export class PairwiseFieldClassifier {
             normalizedEvidenceValue: String(numEvidence),
             evidenceList: evidenceItems,
             requiresHumanReview: true,
-            modelVersion: this.MODEL_VERSION
+            modelVersion: this.MODEL_VERSION,
+            inferenceSource: 'deterministic_rule',
+            modelStatus: 'bypassed',
+            fallbackApplied: false
           };
         }
       }
@@ -221,7 +249,10 @@ export class PairwiseFieldClassifier {
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: true,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'deterministic_rule',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
@@ -240,7 +271,10 @@ export class PairwiseFieldClassifier {
           normalizedEvidenceValue: normEvidence,
           evidenceList: evidenceItems,
           requiresHumanReview: true,
-          modelVersion: this.MODEL_VERSION
+          modelVersion: this.MODEL_VERSION,
+          inferenceSource: 'deterministic_rule',
+          modelStatus: 'bypassed',
+          fallbackApplied: false
         };
       }
 
@@ -254,7 +288,10 @@ export class PairwiseFieldClassifier {
           normalizedEvidenceValue: normEvidence,
           evidenceList: evidenceItems,
           requiresHumanReview: false,
-          modelVersion: this.MODEL_VERSION
+          modelVersion: this.MODEL_VERSION,
+          inferenceSource: 'deterministic_rule',
+          modelStatus: 'bypassed',
+          fallbackApplied: false
         };
       }
 
@@ -268,13 +305,21 @@ export class PairwiseFieldClassifier {
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: true,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: 'deterministic_rule',
+        modelStatus: 'bypassed',
+        fallbackApplied: false
       };
     }
 
     // 8.5 Optional Call to Real Python FastAPI ML Microservice when available
     const mlServiceUrl = process.env.AI_SERVICE_URL || process.env.ML_SERVICE_URL;
+    let mlAttempted = false;
+    let mlFailed = false;
+    let mlErrorDetail = '';
+
     if (mlServiceUrl) {
+      mlAttempted = true;
       try {
         const mlRes = await fetch(`${mlServiceUrl.replace(/\/+$/, '')}/api/v1/classify-pair`, {
           method: 'POST',
@@ -321,16 +366,49 @@ export class PairwiseFieldClassifier {
             normalizedEvidenceValue: normEvidence,
             evidenceList: evidenceItems,
             requiresHumanReview: mlData.requires_human_review ?? (mlData.confidence < 0.60),
-            modelVersion: mlData.model_version || 'form2fact-hybrid-pairwise-v2.0-champion'
+            modelVersion: mlData.model_version || 'form2fact-hybrid-pairwise-v2.0-champion',
+            inferenceSource: 'calibrated_ml',
+            modelStatus: 'available',
+            fallbackApplied: false
           };
+        } else {
+          mlFailed = true;
+          mlErrorDetail = `HTTP ${mlRes.status}: ${mlRes.statusText}`;
+          logger.warn(`ML microservice responded with error status: ${mlErrorDetail}`);
         }
       } catch (err: any) {
-        logger.debug('ML microservice unavailable; falling back to deterministic screening', { error: err.message });
+        mlFailed = true;
+        mlErrorDetail = err.message || 'Microservice timeout or network unreachable';
+        logger.debug('ML microservice unavailable', { error: err.message });
       }
     }
 
-    // 9. Address and General Textual Comparison (Deterministic Fallback)
+    // Strict Mode / Explicit Fallback Invariant:
+    // If ML was configured and failed, and silent fallback is prohibited
+    const allowFallback = process.env.ALLOW_DETERMINISTIC_FALLBACK !== 'false';
+    const requireMl = process.env.REQUIRE_ML_INFERENCE === 'true';
+
+    if (mlAttempted && mlFailed && (!allowFallback || requireMl)) {
+      return {
+        label: 'UNCERTAIN',
+        confidence: 0.0,
+        isDeterministic: false,
+        explanation: `ML pairwise inference microservice is unavailable (${mlErrorDetail}). Automatic deterministic fallback is strictly disabled in strict mode. Finding routed directly to human scrutiny officer.`,
+        normalizedClaimValue: normClaim,
+        normalizedEvidenceValue: normEvidence,
+        evidenceList: evidenceItems,
+        requiresHumanReview: true,
+        modelVersion: 'form2fact-ml-unavailable',
+        inferenceSource: 'calibrated_ml',
+        modelStatus: 'unavailable',
+        fallbackApplied: false
+      };
+    }
+
+    // 9. Address and General Textual Comparison (Deterministic Fallback / Screening)
     const tokenOverlap = this.calculateTokenOverlap(normClaim, normEvidence);
+    const isFallbackMode = mlAttempted && mlFailed;
+    const fallbackPrefix = isFallbackMode ? '[FALLBACK: ML service offline] ' : '';
 
     // High lexical concordance (>= 0.85) -> MATCH
     if (tokenOverlap >= 0.85) {
@@ -338,12 +416,15 @@ export class PairwiseFieldClassifier {
         label: 'MATCH',
         confidence: Number(tokenOverlap.toFixed(2)),
         isDeterministic: true,
-        explanation: `Textual concordance verified via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% token overlap).`,
+        explanation: `${fallbackPrefix}Textual concordance verified via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% token overlap).`,
         normalizedClaimValue: normClaim,
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: tokenOverlap < confidenceThreshold,
-        modelVersion: 'form2fact-deterministic-screening-v1.0'
+        modelVersion: 'form2fact-deterministic-screening-v1.0',
+        inferenceSource: isFallbackMode ? 'deterministic_fallback' : 'deterministic_rule',
+        modelStatus: isFallbackMode ? 'unavailable' : 'bypassed',
+        fallbackApplied: isFallbackMode
       };
     }
 
@@ -354,12 +435,15 @@ export class PairwiseFieldClassifier {
         label: 'MISMATCH',
         confidence: 0.95,
         isDeterministic: true,
-        explanation: `Geographic address conflict verified: ${geoConflict}.`,
+        explanation: `${fallbackPrefix}Geographic address conflict verified: ${geoConflict}.`,
         normalizedClaimValue: normClaim,
         normalizedEvidenceValue: normEvidence,
         evidenceList: evidenceItems,
         requiresHumanReview: true,
-        modelVersion: this.MODEL_VERSION
+        modelVersion: this.MODEL_VERSION,
+        inferenceSource: isFallbackMode ? 'deterministic_fallback' : 'deterministic_rule',
+        modelStatus: isFallbackMode ? 'unavailable' : 'bypassed',
+        fallbackApplied: isFallbackMode
       };
     }
 
@@ -368,19 +452,23 @@ export class PairwiseFieldClassifier {
     logger.info('Pairwise classifier abstaining to UNCERTAIN for human review', {
       claim: claim.rawValue,
       evidence: evidence.rawValue,
-      overlap: tokenOverlap
+      overlap: tokenOverlap,
+      fallbackApplied: isFallbackMode
     });
 
     return {
       label: 'UNCERTAIN',
       confidence: Number(Math.max(0.20, tokenOverlap).toFixed(2)),
       isDeterministic: true,
-      explanation: `Textual variation detected via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% lexical overlap). Information formatting or terminology diverges without verified statutory contradiction; referred for human reviewer verification.`,
+      explanation: `${fallbackPrefix}Textual variation detected via deterministic screening (${(tokenOverlap * 100).toFixed(0)}% lexical overlap). Information formatting or terminology diverges without verified statutory contradiction; referred for human reviewer verification.`,
       normalizedClaimValue: normClaim,
       normalizedEvidenceValue: normEvidence,
       evidenceList: evidenceItems,
       requiresHumanReview: true,
-      modelVersion: 'form2fact-deterministic-screening-v1.0'
+      modelVersion: 'form2fact-deterministic-screening-v1.0',
+      inferenceSource: isFallbackMode ? 'deterministic_fallback' : 'deterministic_rule',
+      modelStatus: isFallbackMode ? 'unavailable' : 'bypassed',
+      fallbackApplied: isFallbackMode
     };
   }
 
