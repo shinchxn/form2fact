@@ -258,7 +258,10 @@ Form2Fact integrates the official **BharatCode Model API** (`https://bharatcode.
    - *Hallucination Guard:* Automatically cross-validates citations and strips any cited document name or page number not present in the ingested evidence.
    - *Classifier Override Guard:* Prohibits the LLM from altering or overriding the classifier label or approving/rejecting an institution.
 5. **Interactive Verification:** The explanation is rendered in the Findings workspace with direct clickable links jumping to the cited document page in the split-screen evidence viewer.
-6. **Graceful Fallback:** If `BHARATCODE_API_KEY` is not configured, the platform preserves deterministic findings without fabricating responses.
+6. **Graceful Fallback:** If `BHARATCODE_API_KEY` is not configured (or the API returns 401/402/429/5xx), the platform preserves deterministic findings without fabricating responses.
+7. **Provider Chain for Deep Scrutiny:** Gemini `gemini-4-argon` (primary, when `GEMINI_API_KEY` is set) → BharatCode `qwen-3.8-27b` (advisory) → deterministic local synthesis (always-available last resort). This is a documented provider chain, not a silent model substitution.
+8. **Reasoning-Model Handling:** `qwen-3.8-27b` is a reasoning model; the service handles `content: null` (chain-of-thought token exhaustion) explicitly and uses a 60 s default timeout (configurable via `BHARATCODE_TIMEOUT_MS`).
+9. **Quota Honesty:** the free student tier is capped at 10 M tokens/day (resets midnight IST) and is shared between development assistance and application inference. Live inference is currently blocked at the credential/subscription layer; the deterministic finding is preserved either way.
 
 ---
 
@@ -267,61 +270,61 @@ Form2Fact integrates the official **BharatCode Model API** (`https://bharatcode.
 All screenshots below are captured directly from the running production application:
 
 ### 1. Institutional Login Portal
-![Login Portal](docs/assets/screenshots/01-login.png)
+![Login Portal](docs/screenshots/01-login.png)
 *Role-based institutional authentication portal with secure administrative access and JWT sessions.*
 
 ---
 
 ### 2. Executive Verification Overview
-![Overview Dashboard](docs/assets/screenshots/02-dashboard.png)
+![Overview Dashboard](docs/screenshots/02-dashboard.png)
 *Live pipeline metrics, active dockets, processing status, and recent audit events.*
 
 ---
 
 ### 3. Applications Management Docket
-![Applications Docket](docs/assets/screenshots/03-applications.png)
+![Applications Docket](docs/screenshots/03-applications.png)
 *Regional application registry with multi-criteria search, category tabs, and status badges.*
 
 ---
 
 ### 4. Application Detail & Document Repository
-![Application Detail Workspace](docs/assets/screenshots/04-document-upload.png)
+![Application Detail Workspace](docs/screenshots/04-application-details.png)
 *Application parameters, supporting PDF evidence table, and SHA-256 cryptographic hashes.*
 
 ---
 
 ### 5. Document Review & Evidence Viewer
-![Evidence Viewer Canvas](docs/assets/screenshots/05-document-viewer.png)
+![Evidence Viewer Canvas](docs/screenshots/06-evidence-viewer.png)
 *Split-screen document viewer displaying multi-page legal PDFs and side-by-side evidence analysis.*
 
 ---
 
 ### 6. Structured Field Extraction Inspector
-![Extracted Parameters Inspector](docs/assets/screenshots/06-evidence-extraction.png)
+![Extracted Parameters Inspector](docs/screenshots/05-document-upload.png)
 *Extracted structured fields with exact document page citations and confidence scores.*
 
 ---
 
 ### 7. Pairwise Verification Console
-![Pairwise Verification Console](docs/assets/screenshots/07-pairwise-verification.png)
+![Pairwise Verification Console](docs/screenshots/07-pairwise-comparison.png)
 *5-class pairwise field classification with calibrated probability confidence bars.*
 
 ---
 
 ### 8. Findings & Compliance Triage
-![Findings Workspace](docs/assets/screenshots/08-findings.png)
+![Findings Workspace](docs/screenshots/08-findings.png)
 *Regulatory discrepancy resolution console linking claims to AICTE handbook clauses.*
 
 ---
 
 ### 9. Human Review Adjudication Modal
-![Human Review Modal](docs/assets/screenshots/09-human-review.png)
+![Human Review Modal](docs/screenshots/09-human-review.png)
 *Reviewer override modal requiring mandatory justification rationale committed to the audit trail.*
 
 ---
 
 ### 10. AICTE Statutory Rules Engine
-![Statutory Rules Engine](docs/assets/screenshots/10-aicte-rules.png)
+![Statutory Rules Engine](docs/screenshots/10-regulatory-rules.png)
 *Transparent regulatory rule catalog with interactive sandbox testing environment.*
 
 ---
@@ -484,6 +487,10 @@ The Form2Fact Pairwise Classifier (`champion-v2.0`) is a hybrid architecture com
 - **Path Traversal Defense:** Docket file paths strictly validate against regex `/^[a-zA-Z0-9_-]+$/` and ensure physical containment within `./data/dockets`.
 - **Append-Only Audit Ledger:** Audit records cannot be updated or deleted through any API endpoint.
 - **Zero Autonomous Approval:** Form2Fact provides statutory evidence citations, but human reviewers maintain sole authority to issue regulatory clearance.
+- **Authentication Hardening:** persona switching (`POST /api/v1/user`) and the user registry (`GET /api/v1/users`) require a valid session; no anonymous JWT minting or public user enumeration.
+- **Login Rate Limiting:** bounded in-memory limiter on `/auth/login` and `/auth/bootstrap-admin` (429 on excess).
+- **Baseline Security Headers:** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a production-only CSP on all responses.
+- **LLM Prompt-Injection Defense:** document excerpts are treated as untrusted data; PII is redacted before transmission; hallucinated citations are filtered; classifier-label override attempts are forced back to the authoritative label.
 
 ---
 
@@ -515,6 +522,13 @@ node ./node_modules/tsx/dist/cli.mjs server/tests/bharatCodeIntegration.test.ts
 
 # 8. Run V3 Staging Operational Rehearsal & Audit Suite (18 Tests - 100% Passed)
 node ./node_modules/tsx/dist/cli.mjs server/tests/stagingOperationalRehearsal.test.ts
+
+# 9. Run the Full End-to-End Application Validation (live server required)
+#    Starts the dev server, then exercises login -> upload -> extraction -> validation ->
+#    findings -> live AI explanation -> deep scrutiny -> review -> audit -> ledger ->
+#    tenant isolation -> RBAC. Reports PASS/FAIL/BLOCKED.
+npm run dev &amp;
+node scripts/e2e-validation.mjs
 ```
 
 ---
@@ -523,6 +537,9 @@ node ./node_modules/tsx/dist/cli.mjs server/tests/stagingOperationalRehearsal.te
 
 - **Benchmark Provenance:** Current ML evaluation benchmarks (`test_rigorous.jsonl`, 41 records) are development benchmarks derived from synthetic and public regulatory templates.
 - **No Ground-Truth Production Scraping:** Because real institutional filings contain confidential legal deeds and personal identifiable information (PII), models were trained on synthetic and public legal document benchmarks. Real-world institutional deployment requires supervised fine-tuning during initial pilot phases.
+- **Live AI Inference (current):** The BharatCode `qwen-3.8-27b` integration is implemented and verified (a real model response was captured earlier in development), but is currently **BLOCKED at the credential/subscription layer** (free-tier OAuth session expired; the supplied `bc_live_…` key requires an active Lite/Pro subscription). The application fails closed and preserves deterministic findings; no code change is required to unblock — only a valid, funded key in `.env`.
+- **Frontend Bundle Size:** the production build ships a single 815 kB JS chunk (code-splitting is planned future work; build succeeds).
+- **Runtime Persistence:** the application uses SQLite (`node:sqlite`) as its runtime database. PostgreSQL, Redis, and MinIO are provided only as an optional `docker compose --profile enterprise` profile and are not wired into application code paths.
 
 ---
 
@@ -535,6 +552,12 @@ node ./node_modules/tsx/dist/cli.mjs server/tests/stagingOperationalRehearsal.te
 - [x] Zero-mock production data integrity cleanup.
 - [x] Coordinated 3-pane document evidence viewer.
 - [x] Append-only tamper-evident audit ledger.
+- [x] BharatCode Qwen 3.8 27B evidence-grounded explanation service (hardened).
+- [x] Login rate limiting + baseline security headers.
+- [x] Auth-gated persona switch and user registry (no anonymous JWT minting).
+- [x] PDF extraction fixed for pdf-parse v2 API.
+- [x] Reproducible end-to-end validation script (`scripts/e2e-validation.mjs`).
+- [x] Cryptographic audit ledger chain verification endpoint.
 
 ### Planned (v1.3.0+)
 - [ ] Multilingual OCR extraction for vernacular regional land records (Marathi, Hindi, Tamil).
