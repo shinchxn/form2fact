@@ -277,6 +277,10 @@ Provide your structured explanation in JSON:`;
           logger.warn('[BharatCode] Authentication failed (HTTP 401/403). Verify BHARATCODE_API_KEY.');
           return { success: false, status: 'auth_error', error: 'BharatCode authentication failed.', latencyMs };
         }
+        if (response.status === 402) {
+          logger.warn('[BharatCode] Subscription required (HTTP 402).');
+          return { success: false, status: 'error', error: 'BharatCode API requires an active subscription (HTTP 402). Deterministic finding is preserved.', latencyMs };
+        }
         if (response.status === 429) {
           logger.warn('[BharatCode] Rate limit exceeded (HTTP 429).');
           return { success: false, status: 'rate_limited', error: 'BharatCode API rate limit exceeded.', latencyMs };

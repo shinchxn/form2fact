@@ -438,9 +438,21 @@ router.post('/api/v1/applications/:id/documents', authenticateToken, requireRole
 
   // 4. PDF Text Parsing
   try {
-    const pdfModule = await import('pdf-parse');
-    const parser = (pdfModule as any).default || (pdfModule as any);
-    const pdfData = typeof parser === 'function' ? await parser(file.buffer) : { numpages: 1, text: '' };
+    const pdfModule: any = await import('pdf-parse');
+    const PDFParse = pdfModule.PDFParse || pdfModule.default?.PDFParse;
+    let pdfData: { numpages: number; text: string } = { numpages: 1, text: '' };
+    if (PDFParse) {
+      const parser = new PDFParse({ data: file.buffer });
+      try {
+        const result = await parser.getText();
+        pdfData = { numpages: result.total || result.pages?.length || 1, text: result.text || '' };
+      } finally {
+        await parser.destroy().catch(() => {});
+      }
+    } else if (typeof pdfModule.default === 'function') {
+      const v1 = await pdfModule.default(file.buffer);
+      pdfData = { numpages: v1.numpages || 1, text: v1.text || '' };
+    }
     pageCount = pdfData.numpages || 1;
     const rawAllText = pdfData.text || '';
 
