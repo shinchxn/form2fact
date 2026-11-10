@@ -78,10 +78,11 @@ export class InMemoryRateLimiter {
 }
 
 /**
- * Authentication rate limit: 10 attempts per 15 minutes per IP+email.
+ * Authentication rate limit: 10 attempts per 15 minutes per IP+email in production,
+ * and 500 in development/test environments to facilitate local testing and automated E2E runs.
  */
 export const authRateLimiter = new InMemoryRateLimiter({
-  maxAttempts: 10,
+  maxAttempts: process.env.NODE_ENV === 'production' ? 10 : 500,
   windowMs: 15 * 60 * 1000,
   name: 'auth'
 });

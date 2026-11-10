@@ -1,5 +1,6 @@
 
 import io
+import os
 import pymupdf
 import pytesseract
 
@@ -9,6 +10,25 @@ from fastapi import HTTPException
 
 MAX_PDF_SIZE = 15 * 1024 * 1024
 MAX_PAGES = 100
+
+
+def get_ocr_lang() -> str:
+    """
+    Resolves supported OCR languages with safe fallback.
+    Supports English ('eng') and Tamil ('tam'), as well as Hindi ('hin').
+    """
+    preferred = os.environ.get("FORM2FACT_OCR_LANG", "eng+tam")
+    try:
+        available = pytesseract.get_languages()
+        parts = [p.strip() for p in preferred.split("+")]
+        valid = [p for p in parts if p in available]
+        if valid:
+            return "+".join(valid)
+        if "eng" in available:
+            return "eng"
+    except Exception:
+        pass
+    return "eng"
 
 
 def process_pdf(data: bytes):
@@ -33,46 +53,55 @@ def process_pdf(data: bytes):
 
             # OCR only when the existing text layer is poor
             if len(text) < 40:
-                pix = page.get_pixmap(
-                    matrix=pymupdf.Matrix(2, 2),
-                    alpha=False
-                )
-                image = Image.open(
-                    io.BytesIO(pix.tobytes("png"))
-                )
-
-                data_result = pytesseract.image_to_data(
-                    image,
-                    output_type=pytesseract.Output.DICT,
-                    timeout=20
-                )
-
-                words = []
-                scores = []
-
-                for word, confidence in zip(
-                    data_result["text"],
-                    data_result["conf"]
-                ):
-                    word = word.strip()
-
-                    if word:
-                        words.append(word)
-
-                    try:
-                        score = float(confidence)
-                        if score >= 0:
-                            scores.append(score)
-                    except (ValueError, TypeError):
-                        pass
-
-                text = " ".join(words)
-                method = "ocr"
-
-                if scores:
-                    ocr_confidence = round(
-                        sum(scores) / len(scores), 2
+                try:
+                    pix = page.get_pixmap(
+                        matrix=pymupdf.Matrix(2, 2),
+                        alpha=False
                     )
+                    image = Image.open(
+                        io.BytesIO(pix.tobytes("png"))
+                    )
+
+                    active_lang = get_ocr_lang()
+                    data_result = pytesseract.image_to_data(
+                        image,
+                        lang=active_lang,
+                        output_type=pytesseract.Output.DICT,
+                        timeout=20
+                    )
+
+                    words = []
+                    scores = []
+
+                    for word, confidence in zip(
+                        data_result["text"],
+                        data_result["conf"]
+                    ):
+                        word = word.strip()
+
+                        if word:
+                            words.append(word)
+
+                        try:
+                            score = float(confidence)
+                            if score >= 0:
+                                scores.append(score)
+                        except (ValueError, TypeError):
+                            pass
+
+                    ocr_text = " ".join(words)
+                    if ocr_text:
+                        text = ocr_text
+                        method = "ocr"
+
+                    if scores:
+                        ocr_confidence = round(
+                            sum(scores) / len(scores), 2
+                        )
+                except Exception:
+                    # Graceful fallback: If Tesseract OCR binary is missing or times out,
+                    # retain existing text layer; page will be marked unreadable if empty.
+                    pass
 
             pages.append({
                 "pageNumber": index + 1,

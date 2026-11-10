@@ -12,7 +12,7 @@ import {
 import { Finding, Application } from '../types/index.ts';
 import { StatusBadge } from '../shared/components/StatusBadge.tsx';
 import { EmptyState } from '../shared/components/EmptyState.tsx';
-import { explainFindingWithBharatCode, BharatCodeExplainResult } from '../services/api.ts';
+import { explainFinding, BharatCodeExplainResult } from '../services/api.ts';
 
 interface FindingsViewProps {
   findings: Finding[];
@@ -33,13 +33,18 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState('all');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [selectedProvider, setSelectedProvider] = useState<'bharatcode-qwen' | 'bharatcode-deepseek' | 'adaption-form2fact'>('bharatcode-qwen');
+  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'ta'>('en');
   const [explanations, setExplanations] = useState<Record<string, BharatCodeExplainResult>>({});
   const [loadingExplanation, setLoadingExplanation] = useState<Record<string, boolean>>({});
 
   const handleExplain = async (findingId: string) => {
     setLoadingExplanation((prev) => ({ ...prev, [findingId]: true }));
     try {
-      const res = await explainFindingWithBharatCode(findingId);
+      const res = await explainFinding(findingId, {
+        providerId: selectedProvider,
+        preferredLanguage: selectedLanguage
+      });
       setExplanations((prev) => ({ ...prev, [findingId]: res }));
     } catch (err: any) {
       setExplanations((prev) => ({
@@ -47,7 +52,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         [findingId]: {
           success: false,
           status: 'error',
-          error: err.message || 'Failed to connect to BharatCode service'
+          error: err.message || 'Failed to connect to AI explanation service'
         }
       }));
     } finally {
@@ -182,6 +187,73 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Multi-Model AI Orchestration Engine Selector */}
+        <div className="pt-2 border-t border-[#E2E8F0]/70 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
+            <span className="font-semibold text-[#0F172A]">AI Explanation Provider:</span>
+            <div className="inline-flex rounded-md p-0.5 bg-[#FFFFFF] border border-[#E2E8F0]">
+              <button
+                type="button"
+                onClick={() => setSelectedProvider('bharatcode-qwen')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  selectedProvider === 'bharatcode-qwen'
+                    ? 'bg-[#EEF2FF] text-[#4F46E5] font-semibold'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+              >
+                BharatCode Qwen 3.8 27B
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProvider('bharatcode-deepseek')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  selectedProvider === 'bharatcode-deepseek'
+                    ? 'bg-[#EEF2FF] text-[#4F46E5] font-semibold'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+              >
+                DeepSeek v4.1 Flash
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProvider('adaption-form2fact')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  selectedProvider === 'adaption-form2fact'
+                    ? 'bg-[#EEF2FF] text-[#4F46E5] font-semibold'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+              >
+                Adaption Model (Draft)
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[#64748B] text-xs">Language:</span>
+            <div className="inline-flex rounded-md p-0.5 bg-[#FFFFFF] border border-[#E2E8F0]">
+              <button
+                type="button"
+                onClick={() => setSelectedLanguage('en')}
+                className={`px-2 py-0.5 text-xs font-medium rounded cursor-pointer ${
+                  selectedLanguage === 'en' ? 'bg-[#4F46E5] text-white font-semibold' : 'text-[#64748B]'
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedLanguage('ta')}
+                className={`px-2 py-0.5 text-xs font-medium rounded cursor-pointer ${
+                  selectedLanguage === 'ta' ? 'bg-[#4F46E5] text-white font-semibold' : 'text-[#64748B]'
+                }`}
+              >
+                தமிழ்
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Findings List */}
@@ -312,14 +384,14 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                   </div>
                 )}
 
-                {/* BharatCode Qwen 3.8 27B AI Explanation Card */}
+                {/* Multi-Model AI Explanation Card */}
                 {explanations[finding.id] && (
                   <div className="p-4 bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg text-xs space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-[#DCFCE7]">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#16A34A]" />
                         <span className="font-semibold text-[#166534] text-sm">
-                          AI Evidence Explanation · BharatCode {explanations[finding.id].modelUsed || 'qwen-3.8-27b'}
+                          AI Evidence Explanation · {explanations[finding.id].providerId || selectedProvider} ({explanations[finding.id].modelUsed || 'AI Model'})
                         </span>
                         <span className="px-2 py-0.5 rounded bg-[#DCFCE7] text-[#15803D] font-mono text-[10px]">
                           Advisory Reasoning
@@ -340,6 +412,16 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                         <p className="text-xs text-[#166534] leading-relaxed">
                           {explanations[finding.id].data?.reasoning}
                         </p>
+
+                        {/* Grounding Safeguard Alerts */}
+                        {explanations[finding.id].groundingAlerts && explanations[finding.id].groundingAlerts!.length > 0 && (
+                          <div className="pt-2 border-t border-[#DCFCE7] text-[11px] text-[#0369A1] bg-[#F0F9FF] p-2.5 rounded border border-[#BAE6FD] space-y-0.5">
+                            <span className="font-semibold">Evidence Grounding Invariant Guards:</span>
+                            {explanations[finding.id].groundingAlerts!.map((alert, i) => (
+                              <div key={i}>• {alert}</div>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Verified Citations */}
                         {(explanations[finding.id].data?.evidence_references || []).length > 0 && (
@@ -383,7 +465,9 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                         <div>
                           <div className="font-semibold">
                             {explanations[finding.id].status === 'unavailable'
-                              ? 'BharatCode API Ready (Key Not Configured)'
+                              ? `${selectedProvider === 'bharatcode-deepseek' ? 'DeepSeek' : selectedProvider === 'adaption-form2fact' ? 'Adaption' : 'BharatCode'} API Ready (Credentials/Endpoint Not Configured)`
+                              : explanations[finding.id].status === 'subscription_required'
+                              ? `${selectedProvider === 'bharatcode-deepseek' ? 'DeepSeek' : 'BharatCode'} API Key Valid (Subscription Plan Required)`
                               : 'AI Explanation Unavailable'}
                           </div>
                           <div className="text-[11px] text-[#B91C1C] mt-0.5">
@@ -391,7 +475,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                           </div>
                           {explanations[finding.id].status === 'unavailable' && (
                             <div className="text-[11px] text-[#64748B] mt-1">
-                              Configure <code className="bg-[#F1F5F9] px-1 py-0.5 rounded text-[#0F172A]">BHARATCODE_API_KEY</code> in environment to generate live AI explanations using Qwen 3.8 27B.
+                              Configure <code className="bg-[#F1F5F9] px-1 py-0.5 rounded text-[#0F172A]">{selectedProvider === 'bharatcode-deepseek' ? 'BHARATCODE_DEEPSEEK_API_KEY' : selectedProvider === 'adaption-form2fact' ? 'ADAPTION_MODEL_ENDPOINT' : 'BHARATCODE_API_KEY'}</code> in project environment to generate live AI explanations.
                             </div>
                           )}
                         </div>
@@ -424,12 +508,12 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
                       {loadingExplanation[finding.id] ? (
                         <>
                           <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Consulting BharatCode...</span>
+                          <span>Consulting {selectedProvider === 'bharatcode-deepseek' ? 'DeepSeek' : selectedProvider === 'adaption-form2fact' ? 'Adaption' : 'Qwen'}...</span>
                         </>
                       ) : (
                         <>
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Explain with BharatCode</span>
+                          <span>Explain with {selectedProvider === 'bharatcode-deepseek' ? 'DeepSeek' : selectedProvider === 'adaption-form2fact' ? 'Adaption' : 'Qwen'}</span>
                         </>
                       )}
                     </button>

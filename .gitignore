@@ -55,3 +55,7 @@ ai_service/ml/data/v3/**/*.jpeg
 # Exclude local V3 uncommitted training checkpoints
 ai_service/ml/artifacts/v3/checkpoints/
 ai_service/ml/artifacts/v3/*.tmp
+
+# Playwright test artifacts
+test-results/
+playwright-report/

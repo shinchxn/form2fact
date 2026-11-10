@@ -277,19 +277,69 @@ export interface BharatCodeExplainResult {
   status: string;
   data?: BharatCodeExplanationData;
   modelUsed?: string;
+  providerId?: string;
   latencyMs?: number;
   error?: string;
+  groundingAlerts?: string[];
+}
+
+export interface AIProviderInfo {
+  id: string;
+  name: string;
+  platform: string;
+  modelId: string;
+  modelVersion: string;
+  description: string;
+  isConfigured: boolean;
+  isAuthoritativeVerification: boolean;
+  capabilities: Array<{
+    task: string;
+    supportsStreaming: boolean;
+    supportsJsonOutput: boolean;
+    maxContextTokens: number;
+    languages: string[];
+  }>;
+  health?: {
+    isConfigured: boolean;
+    isHealthy: boolean;
+    latencyMs?: number;
+    lastChecked: string;
+    message?: string;
+  };
 }
 
 /**
- * Invokes BharatCode Qwen 3.8 27B model API for evidence-grounded finding explanation.
+ * Fetches available multi-model AI providers and their configuration status.
  */
-export async function explainFindingWithBharatCode(findingId: string): Promise<BharatCodeExplainResult> {
-  const res = await fetch(`${API_BASE}/findings/${findingId}/explain`, {
-    method: 'POST',
+export async function fetchAIProviders(): Promise<AIProviderInfo[]> {
+  const res = await fetch(`${API_BASE}/ai/providers`, {
     headers: getHeaders()
   });
+  const json = await res.json();
+  return json.data || [];
+}
+
+/**
+ * Invokes the AI model orchestration layer for evidence-grounded finding explanation.
+ * Supports provider selection ('bharatcode-qwen', 'bharatcode-deepseek', 'adaption-form2fact').
+ */
+export async function explainFinding(
+  findingId: string,
+  options?: { providerId?: string; preferredLanguage?: 'en' | 'ta' }
+): Promise<BharatCodeExplainResult> {
+  const res = await fetch(`${API_BASE}/findings/${findingId}/explain`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(options || {})
+  });
   return res.json();
+}
+
+/**
+ * Backward-compatible helper for BharatCode Qwen 3.8 27B model API.
+ */
+export async function explainFindingWithBharatCode(findingId: string): Promise<BharatCodeExplainResult> {
+  return explainFinding(findingId, { providerId: 'bharatcode-qwen' });
 }
 
 export async function recordApplicationDecision(

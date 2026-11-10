@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "manifest_version": "1.0.0",
+  "dataset_name": "Form2Fact Statutory Domain Adaption Corpus",
+  "dataset_id": "form2fact-domain-adaption-v1.0",
+  "creation_date": "2026-11-10T07:35:00Z",
+  "author": "Form2Fact Senior AI/ML Data Engineering Team",
+  "provenance_and_licensing": {
+    "license": "MIT",
+    "license_type": "Permissive Open Source",
+    "commercial_use_permitted": true,
+    "origin_sources": [
+      {
+        "source_id": "form2fact_v1_baseline",
+        "file": "ai_service/ml/data/raw/form2fact_pairwise_dataset.jsonl",
+        "record_count": 70,
+        "origin_type": "synthetic_seed_pairs",
+        "license": "MIT"
+      },
+      {
+        "source_id": "form2fact_v2_domain_expansion",
+        "file": "ai_service/ml/data/v2_acquisition/processed/form2fact_domain_candidates/form2fact_v2_domain_expansion.jsonl",
+        "record_count": 1250,
+        "origin_type": "synthetic_regulatory_slot_filling",
+        "license": "MIT"
+      }
+    ],
+    "excluded_sources": [
+      {
+        "source_id": "snli_mapped_candidates",
+        "reason": "General domain Flickr30k captions; incomplete 2-class mapping without regulatory context."
+      },
+      {
+        "source_id": "averitec_train_dev",
+        "reason": "CC BY-NC 4.0 non-commercial license; general web fact-checking without regulatory pairs."
+      },
+      {
+        "source_id": "fever_shared_task_dev",
+        "reason": "General Wikipedia claim verification; cannot map 3-class into 5-class regulatory taxonomy."
+      },
+      {
+        "source_id": "multinli_raw",
+        "reason": "General genre NLI; neutral cannot equate to UNCERTAIN or NOT_COMPARABLE."
+      },
+      {
+        "source_id": "form2fact_sqlite_db",
+        "reason": "Automated test fixtures and mock staging rehearsal dockets; unverified human ground truth."
+      }
+    ]
+  },
+  "synthetic_disclosure": {
+    "is_synthetic": true,
+    "synthetic_ratio": 1.0,
+    "human_ground_truth_established": false,
+    "governance_note": "This corpus is 100% synthetically constructed from statutory AICTE/regulatory approval criteria. It is strictly designed for exploratory LLM domain adaptation, instruction fine-tuning, and reasoning pattern evaluation. It MUST NOT be represented as certified human institutional ground truth."
+  },
+  "taxonomy": [
+    "MATCH",
+    "MISMATCH",
+    "MISSING",
+    "UNCERTAIN",
+    "NOT_COMPARABLE"
+  ],
+  "statistics": {
+    "total_records_full": 1320,
+    "total_records_deduplicated": 520,
+    "label_distribution_full": {
+      "MATCH": 419,
+      "MISMATCH": 377,
+      "MISSING": 204,
+      "UNCERTAIN": 162,
+      "NOT_COMPARABLE": 158
+    },
+    "category_distribution_full": {
+      "V1 Regulatory Baseline": 70,
+      "Land Tenure & Lease Duration": 165,
+      "Built-up Instructional Area vs Deed": 155,
+      "Campus Land Area & Contiguity": 136,
+      "Accreditation & Faculty Verification": 156,
+      "Approved Academic Intake": 161,
+      "Statutory Safety & Fire NOC": 151,
+      "Program Accreditation Outcome": 173,
+      "Institution Identity & Sponsoring Body": 153
+    },
+    "total_records_clean_deduplicated": 519,
+    "total_records_quarantined": 1
+  },
+  "files": [
+    {
+      "filename": "adaption_instructions_full.jsonl",
+      "purpose": "Full instruction-tuning dataset for LLM adaptation",
+      "format": "JSONL (instruction, input, output, messages)",
+      "record_count": 1320,
+      "size_bytes": 3105970,
+      "sha256": "7d8d37dee23838a52ec23379216354bd90ddafab3e8c8a67604cff44ec5a8788"
+    },
+    {
+      "filename": "adaption_instructions_deduped.jsonl",
+      "purpose": "Deduplicated unique instruction-tuning dataset to avoid overfitting",
+      "format": "JSONL (instruction, input, output, messages)",
+      "record_count": 520,
+      "size_bytes": 1200109,
+      "sha256": "06cfa74d826b7b11c4db33b298eb8f342c56e6dae31518647295912c48c2af3b"
+    },
+    {
+      "filename": "adaption_structured_records.csv",
+      "purpose": "Tabular flat export for tabular modeling and GBDT/feature baseline comparison",
+      "format": "CSV (UTF-8, comma-delimited)",
+      "record_count": 1320,
+      "size_bytes": 565697,
+      "sha256": "a27e87938cc1e0ac23d9d199f56704d607363f08c734e2676096c11478dbac29"
+    }
+  ],
+  "leakage_resistant_splits": {
+    "split_method": "group_stratified_by_template_family",
+    "split_ratios": "72.3% Train / 11.8% Val / 16.0% Test",
+    "cross_split_family_leakage": 0,
+    "test_set_isolation_mandate": "Test split is strictly reserved for post-adaptation evaluation and must NEVER be used for training, prompt tuning, or gradient calculation.",
+    "splits": {
+      "train": {
+        "filename": "train.jsonl",
+        "record_count": 375,
+        "size_bytes": 864197,
+        "sha256": "e5ac3a4a08b9113a075c943a2d0bfe1ff0423547d58d93eb1d8455c2e0f01ea3",
+        "label_distribution": {
+          "MATCH": 108,
+          "MISMATCH": 126,
+          "MISSING": 88,
+          "UNCERTAIN": 50,
+          "NOT_COMPARABLE": 3
+        }
+      },
+      "validation": {
+        "filename": "validation.jsonl",
+        "record_count": 61,
+        "size_bytes": 140870,
+        "sha256": "aed6be8016751b2aed5c47569294300bc25602c5b4ea11ad4b64ed843ffda69d",
+        "label_distribution": {
+          "MATCH": 24,
+          "MISMATCH": 28,
+          "MISSING": 7,
+          "UNCERTAIN": 1,
+          "NOT_COMPARABLE": 1
+        }
+      },
+      "test": {
+        "filename": "test.jsonl",
+        "record_count": 83,
+        "size_bytes": 192787,
+        "sha256": "bc42877721463890e7c5793b0d1b2f296916d000a56a6f1a3b822dda1e75d7d6",
+        "label_distribution": {
+          "MATCH": 27,
+          "MISMATCH": 30,
+          "MISSING": 16,
+          "UNCERTAIN": 9,
+          "NOT_COMPARABLE": 1
+        }
+      },
+      "quarantine": {
+        "filename": "quarantine/quarantined_anomalies.jsonl",
+        "record_count": 1,
+        "size_bytes": 2399,
+        "sha256": "aaf66a7d3c8ded547cd436bc49a1593fe1b83ca4ec5a9034353781a22748ae0b",
+        "reason": "Synthetic generator clipping defect creating identical claim/evidence with MISMATCH label"
+      }
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "dataset": "ai_service\\ml\\data\\adaption\\test.jsonl",
+  "record_count": 83,
+  "ground_truth_distribution": {
+    "MATCH": 27,
+    "MISMATCH": 30,
+    "MISSING": 16,
+    "UNCERTAIN": 9,
+    "NOT_COMPARABLE": 1
+  },
+  "results": [
+    {
+      "engine": "Form2Fact Hybrid Deterministic Engine",
+      "total": 83,
+      "accuracy": 0.891566265060241,
+      "macro_f1": 0.6139130434782609,
+      "avg_latency_ms": 0.07935301202604637,
+      "per_class": {
+        "MATCH": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 27,
+          "tp": 27,
+          "fp": 0,
+          "fn": 0
+        },
+        "MISMATCH": {
+          "precision": 0.7692307692307693,
+          "recall": 1.0,
+          "f1": 0.8695652173913044,
+          "support": 30,
+          "tp": 30,
+          "fp": 9,
+          "fn": 0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 16,
+          "tp": 16,
+          "fp": 0,
+          "fn": 0
+        },
+        "UNCERTAIN": {
+          "precision": 1.0,
+          "recall": 0.1111111111111111,
+          "f1": 0.19999999999999998,
+          "support": 9,
+          "tp": 1,
+          "fp": 0,
+          "fn": 8
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1,
+          "tp": 0,
+          "fp": 0,
+          "fn": 1
+        }
+      }
+    },
+    {
+      "engine": "Form2Fact Calibrated ML Engine (SentenceTransformer + Temp Scaling)",
+      "total": 83,
+      "accuracy": 0.963855421686747,
+      "macro_f1": 0.7582542694497154,
+      "avg_latency_ms": 455.1310819276175,
+      "per_class": {
+        "MATCH": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 27,
+          "tp": 27,
+          "fp": 0,
+          "fn": 0
+        },
+        "MISMATCH": {
+          "precision": 0.9375,
+          "recall": 1.0,
+          "f1": 0.967741935483871,
+          "support": 30,
+          "tp": 30,
+          "fp": 2,
+          "fn": 0
+        },
+        "MISSING": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 16,
+          "tp": 16,
+          "fp": 0,
+          "fn": 0
+        },
+        "UNCERTAIN": {
+          "precision": 0.875,
+          "recall": 0.7777777777777778,
+          "f1": 0.823529411764706,
+          "support": 9,
+          "tp": 7,
+          "fp": 1,
+          "fn": 2
+        },
+        "NOT_COMPARABLE": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1,
+          "tp": 0,
+          "fp": 0,
+          "fn": 1
+        }
+      }
+    }
+  ]
+}

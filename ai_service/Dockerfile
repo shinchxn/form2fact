@@ -6,9 +6,11 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /workspace
 
-# Install system dependencies including Tesseract OCR engine
+# Install system dependencies including Tesseract OCR engine with Tamil and Hindi models
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    tesseract-ocr-tam \
+    tesseract-ocr-hin \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \

@@ -20,6 +20,7 @@ import { buildAicteLeasePreview } from './domains/aicte/adapter.ts';
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.ts';
 import { BharatCodeService } from './modules/explanation/bharatCodeService.ts';
+import { modelRegistry, modelRouter } from './modules/ai/providers/index.ts';
 import { jobQueue } from './core/jobs/index.ts';
 import { storageProvider } from './core/storage/index.ts';
 import { validate } from './core/validation/validate.ts';
@@ -998,8 +999,47 @@ router.post('/api/v1/findings/:id/review', authenticateToken, requireRole(['Admi
 });
 
 /**
- * BharatCode Model API Integration Endpoint:
- * Generates an evidence-grounded AI explanation for an existing finding using BharatCode Qwen 3.8 27B.
+ * Multi-Model AI Provider Discovery Endpoint:
+ * Lists all registered AI providers, active models, platforms, and capabilities.
+ */
+router.get('/api/v1/ai/providers', authenticateToken, async (_req: Request, res: Response) => {
+  const metadata = modelRegistry.listMetadata();
+  const healthCache = await modelRegistry.checkAllHealth({ timeoutMs: 3000 });
+
+  const providersWithStatus = metadata.map(meta => ({
+    ...meta,
+    isConfigured: modelRegistry.get(meta.id)?.isConfigured() ?? false,
+    health: healthCache[meta.id]
+  }));
+
+  res.json({
+    success: true,
+    count: providersWithStatus.length,
+    data: providersWithStatus
+  });
+});
+
+/**
+ * Multi-Model AI Provider Health Check Endpoint
+ */
+router.get('/api/v1/ai/providers/:id/health', authenticateToken, async (req: Request, res: Response) => {
+  const provider = modelRegistry.get(req.params.id);
+  if (!provider) {
+    return res.status(404).json({ success: false, error: `Provider '${req.params.id}' not found.` });
+  }
+
+  const health = await provider.checkHealth();
+  res.json({
+    success: true,
+    providerId: provider.metadata.id,
+    health
+  });
+});
+
+/**
+ * Multi-Model Finding Explanation Endpoint:
+ * Generates an evidence-grounded AI explanation for an existing finding using the requested
+ * or default provider (e.g. BharatCode Qwen 3.8 27B, DeepSeek v4.1 Flash, or Adaption).
  * Authoritative finding and classifier label remain strictly preserved.
  */
 router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -1029,8 +1069,10 @@ router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: Authe
   }
 
   const primaryEvidence = finding.evidenceList?.[0];
+  const requestedProviderId = req.body?.providerId;
+  const preferredLanguage = req.body?.preferredLanguage;
 
-  const result = await BharatCodeService.generateExplanation({
+  const result = await modelRouter.routeExplanation({
     claim: {
       fieldName: finding.ruleKey || 'statutory_claim',
       fieldLabel: finding.title || 'Institutional Declaration',
@@ -1055,7 +1097,10 @@ router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: Authe
       ruleKey: finding.ruleKey,
       ruleTitle: finding.title,
       requirement: finding.explanation
-    }
+    },
+    preferredLanguage
+  }, {
+    providerId: requestedProviderId
   });
 
   res.json({
@@ -1063,13 +1108,50 @@ router.post('/api/v1/findings/:id/explain', authenticateToken, async (req: Authe
     status: result.status,
     data: result.data,
     modelUsed: result.modelUsed,
+    providerId: result.providerId,
     latencyMs: result.latencyMs,
-    error: result.error
+    error: result.error,
+    groundingAlerts: result.groundingAlerts
   });
 });
 
 /**
- * Arbitrary Pairwise BharatCode Explanation Endpoint
+ * Unified Multi-Model Arbitrary Pairwise Explanation Endpoint
+ */
+router.post('/api/v1/ai/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { claim, evidence, classifierResult, ruleContext, providerId, preferredLanguage } = req.body;
+
+  if (!claim || !claim.fieldName || !claim.rawValue || !classifierResult || !classifierResult.label) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: claim (fieldName, rawValue) and classifierResult (label, confidence, explanation) are mandatory.'
+    });
+  }
+
+  const result = await modelRouter.routeExplanation({
+    claim,
+    evidence,
+    classifierResult,
+    ruleContext,
+    preferredLanguage
+  }, {
+    providerId
+  });
+
+  res.json({
+    success: result.success,
+    status: result.status,
+    data: result.data,
+    modelUsed: result.modelUsed,
+    providerId: result.providerId,
+    latencyMs: result.latencyMs,
+    error: result.error,
+    groundingAlerts: result.groundingAlerts
+  });
+});
+
+/**
+ * Arbitrary Pairwise BharatCode Explanation Endpoint (Legacy compatibility)
  */
 router.post('/api/v1/ai/bharatcode/explain', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { claim, evidence, classifierResult, ruleContext } = req.body;
@@ -1081,11 +1163,13 @@ router.post('/api/v1/ai/bharatcode/explain', authenticateToken, async (req: Auth
     });
   }
 
-  const result = await BharatCodeService.generateExplanation({
+  const result = await modelRouter.routeExplanation({
     claim,
     evidence,
     classifierResult,
     ruleContext
+  }, {
+    providerId: 'bharatcode-qwen'
   });
 
   res.json({

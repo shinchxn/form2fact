@@ -21,6 +21,7 @@ import { PairwiseFieldClassifier } from './modules/verification/pairwiseEngine.t
 import { OrganizationService } from './modules/organizations/organization.service.ts';
 import { jobQueue } from './core/jobs/index.ts';
 import { AppError } from './core/errors/AppError.ts';
+import { runMultiModelOrchestrationSuite } from './tests/multiModelOrchestration.test.ts';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -949,6 +950,12 @@ if (fs.existsSync(distHtmlPath)) {
   const htmlContent = fs.readFileSync(distHtmlPath, 'utf8');
   assert(htmlContent.includes('<div id="root"></div>'), 'Production dist/index.html includes root mount container');
 }
+
+// -----------------------------------------------------------------
+// 24. MULTI-MODEL AI ORCHESTRATION & PROVIDER TESTS
+// -----------------------------------------------------------------
+console.log('\n[24] Testing Multi-Model AI Orchestration Layer...');
+await runMultiModelOrchestrationSuite();
 
 // Close test HTTP server cleanly
 await new Promise<void>((resolve, reject) => {

@@ -19,7 +19,7 @@
 
 **From Institutional Claims to Verifiable Statutory Evidence.**
 
-[Live Application](http://localhost:3000) • [BharatCode Integration](#105-bharatcode-model-api-integration-qwen-38-27b) • [Architecture](#7-system-architecture) • [Workflow](#8-application-workflow) • [API Documentation](#15-api-documentation) • [Installation](#13-installation-and-setup)
+[Live Application](http://localhost:3000) • [Multi-Model AI Architecture](#105-multi-model-ai-orchestration-layer-bharatcode-qwen-deepseek--adaption) • [Architecture](#7-system-architecture) • [Workflow](#8-application-workflow) • [API Documentation](#15-api-documentation) • [Installation](#13-installation-and-setup)
 
 </div>
 
@@ -28,8 +28,13 @@
 ## BharatCode Build League 2026 Submission
 - **Target Competition:** BharatCode Build League 2026 (`https://auth.bharatcode.ai/build`)
 - **Recommended Category:** **Work & automation** (Cognitive Document Intelligence & Regulatory Scrutiny Automation)
-- **Model API Integration:** BharatCode Qwen 3.8 27B (`qwen-3.8-27b`) via `https://bharatcode.ai/api/model/v1`
-- **Submission Specification:** Fully documented in root [`BharatCode.txt`](BharatCode.txt) and [`docs/bharatcode/`](docs/bharatcode/).
+- **Multi-Model AI Integration:**
+  - **BharatCode Qwen 3.8 27B (`qwen-3.8-27b`):** High-capacity bilingual reasoning model for evidence-grounded finding explanations.
+  - **BharatCode DeepSeek v4.1 Flash (`deepseek-v4.1-flash`):** Ultra-fast, 65,536-token long-context model for holistic cross-document scrutiny memos.
+  - **Adaption SFT Model (`form2fact-adaption-sft-v1.0`):** Domain-adapted statutory SFT model pipeline trained via Adaption AutoScientist.
+  - **Form2Fact Hybrid Pairwise Classifier (Authoritative):** Calibrated 5-class verification engine retaining sole decision authority.
+- **Bilingual Scrutiny:** English and Tamil (`தமிழ்`) reasoning toggle for regional state dockets.
+- **Submission Specification:** Fully documented in root [`BharatCode.txt`](BharatCode.txt) and [`docs/engineering/`](docs/engineering/).
 
 ---
 
@@ -109,15 +114,19 @@ Form2Fact automates evidence verification across seven distinct stages:
 
 ## 6. Key Features
 
+- **Multi-Model AI Orchestration:** Task-based intelligent routing across BharatCode Qwen 3.8 27B, DeepSeek v4.1 Flash, and Adaption SFT models, strictly preserving the authoritative 5-class pairwise classifier.
+- **Bilingual Legal Scrutiny:** Dynamic language toggle between English and Tamil (`தமிழ்`) for vernacular legal deeds and regional regulatory dockets.
 - **Multi-Tenant Regional Scrutiny:** Strict tenant data isolation between Western, Central, and Northern Directorates.
 - **Cryptographic Evidence Verification:** Magic-byte header validation (`%PDF-`) and SHA-256 integrity checksums for every docket upload.
-- **Calibrated Pairwise Field Matching:** Neural and deterministic token-level comparison evaluating institutional parameters.
-- **AICTE Regulatory Rules Engine:** Automated evaluation of:
+- **Calibrated Pairwise Field Matching:** Neural and deterministic token-level comparison evaluating institutional parameters across the 5-class taxonomy (`MATCH`, `MISMATCH`, `MISSING`, `UNCERTAIN`, `NOT_COMPARABLE`).
+- **AICTE Regulatory Rules Engine:** Automated statutory evaluation of:
   - `RULE-TEN-01`: Minimum 30-year unexpired lease tenure requirement.
   - `RULE-NAME-02`: Concordance between sponsoring society and beneficiary institution.
   - `RULE-AREA-03`: Multi-parcel land acreage aggregation without double-counting.
   - `RULE-DOC-04`: Mandatory Fire & Life Safety NOC presence.
   - `RULE-SAFETY-06`: Identification of unreadable scanned photocopies.
+- **Anti-Hallucination Grounding Guards:** Automatic stripping of fabricated citations; enforcement that external LLMs cannot override deterministic finding classifications.
+- **Multilingual OCR Pipeline:** Hybrid extraction combining high-speed PyMuPDF text layers with Tesseract multilingual OCR supporting English (`eng`), Tamil (`tam`), and Hindi (`hin`).
 - **Coordinated 3-Pane Document Viewer:** Document index, high-fidelity canvas, and structured parameter inspector with exact page-level citations.
 - **Zero-Mock Operational Integrity:** In clean production environments, zero fabricated demo records or fake metric cards are rendered.
 - **Immutable Audit Trail:** Append-only cryptographic ledger tracking every field override, status transition, and reviewer sign-off.
@@ -133,37 +142,53 @@ flowchart TD
         Docket[Applications Docket]
         Workbench[3-Pane Evidence Workbench]
         Findings[Compliance Triage & Adjudication]
+        ModelToolbar[Multi-Model Selector & Lang Toggle]
     end
 
     subgraph Gateway["API Gateway & Scrutiny Engine (Node 24 + Express)"]
         Auth[JWT & RBAC Module]
         Tenant[Multi-Tenant Isolation]
         Rules[Deterministic AICTE Rules Engine]
+        Router[Task-Based ModelRouter]
+        Registry[Multi-Model Registry]
         Storage[Storage Provider: Local Disk (Append-Only)]
         DB[(Persistent SQLite with WAL)]
     end
 
+    subgraph ExternalAI["External & Adapted AI Providers"]
+        Qwen[BharatCode Qwen 3.8 27B]
+        DeepSeek[BharatCode DeepSeek v4.1 Flash]
+        Adaption[Adaption Labs SFT Checkpoint]
+    end
+
     subgraph AIService["AI & ML Microservice (FastAPI + PyTorch)"]
-        Router[Inference Router]
-        Classifier[Calibrated Pairwise Classifier V2]
+        PairwiseML[Calibrated Pairwise Classifier V2]
         TempScaling[Temperature Scaling Layer T=1.8182]
-        OCR[Tesseract / Textract OCR Pipeline]
+        OCR[Tesseract Multilingual OCR: eng+tam+hin]
     end
 
     UI -->|HTTPS / REST API| Auth
     Docket --> Auth
     Workbench --> Auth
     Findings --> Auth
+    ModelToolbar --> Auth
 
     Auth --> Tenant
     Tenant --> Rules
     Tenant --> Storage
     Tenant --> DB
 
-    Rules -->|Internal HTTP API POST /classify-pair| Router
+    Rules -->|Task: field_comparison (Authoritative)| PairwiseML
+    PairwiseML --> TempScaling
+
+    Findings -->|Task: evidence_explanation| Router
+    Findings -->|Task: document_scrutiny| Router
+    Router --> Registry
+    Registry -.->|Advisory Reasoning| Qwen
+    Registry -.->|Long-Context Scrutiny| DeepSeek
+    Registry -.->|Domain Adaptation| Adaption
+
     Storage -->|PDF Buffer Stream| OCR
-    Router --> Classifier
-    Classifier --> TempScaling
 ```
 
 ---
@@ -230,38 +255,61 @@ Form2Fact implements a rigorous five-class pairwise taxonomy for comparing claim
 - **Storage:** `IStorageProvider` (Local Filesystem with path containment defense & SHA-256 verification)
 - **Security:** `jsonwebtoken` (v9.0), `bcryptjs` (v3.0), `multer` (v2.5)
 
-### Machine Learning & OCR Microservice
+### Machine Learning & Multilingual OCR Microservice
 - **API Engine:** Python 3.13 / FastAPI (`0.115.x`) with Uvicorn
 - **ML Framework:** PyTorch (`2.6.x`), HuggingFace Transformers, Scikit-learn
 - **Calibration:** Temperature Scaling ($T = 1.8182$) fitted on validation log-likelihood ($N = 162$)
-- **OCR Engine:** Tesseract OCR / `pytesseract` with multi-page fallback
+- **OCR Engine:** Tesseract OCR / `pytesseract` supporting English (`eng`), Tamil (`tam`), and Hindi (`hin`) with automatic image preprocessing
+- **Fast-Path Engine:** PyMuPDF (`fitz`) high-throughput PDF text-layer extraction
 
-### BharatCode Model Reasoning Layer
-- **Model:** BharatCode Qwen 3.8 27B (`qwen-3.8-27b`)
-- **API Base:** `https://bharatcode.ai/api/model/v1`
-- **Service:** `server/modules/explanation/bharatCodeService.ts`
-- **Role:** Evidence-grounded explanation and statutory clause synthesis
-- **Privacy:** Client-side PII redaction (Aadhaar, PAN, phone, email, accounts) prior to transmission
-- **Safeguards:** Hallucination removal filter + Classifier override prevention
+### Multi-Model AI Orchestration Layer
+- **Architecture:** Task-Based `ModelRouter` and singleton `ModelRegistry` in `server/modules/ai/providers/`
+- **Models Integrated:**
+  - **BharatCode Qwen 3.8 27B (`bharatcode-qwen`):** High-capacity bilingual reasoning model for evidence-grounded finding explanations
+  - **BharatCode DeepSeek v4.1 Flash (`bharatcode-deepseek`):** Long-context (65,536 tokens) reasoning model for cross-document docket scrutiny synthesis
+  - **Adaption SFT Model (`adaption-form2fact`):** AutoScientist domain-adapted model pipeline for institutional discrepancy rationales
+  - **Form2Fact Hybrid Pairwise Classifier (`form2fact-classifier`):** Calibrated 5-class verification engine (**authoritative**)
+- **Telemetry:** Per-request token consumption, model identification, latency measurement, and health probes
+- **Privacy & Safety:** Client-side PII redaction (`redactPii`), credential sanitization (`sanitizeSecret`), citation grounding, and classifier overwrite protection
 
 ---
 
-## 10.5. BharatCode Model API Integration (Qwen 3.8 27B)
+## 10.5. Multi-Model AI Orchestration Layer (BharatCode Qwen, DeepSeek & Adaption)
 
-Form2Fact integrates the official **BharatCode Model API** (`https://bharatcode.ai/api/model/v1`) using **`qwen-3.8-27b`** to generate evidence-grounded legal reasoning explaining regulatory discrepancies for human scrutiny committees.
+Form2Fact features a centralized multi-model orchestration layer that connects external foundation models and domain-adapted checkpoints while **strictly preserving the authority of the native deterministic rules and calibrated 5-class pairwise classifier**.
 
-### Workflow & Safeguards:
-1. **Local Text Extraction & PII Redaction:** Text snippets from the institutional application and supporting legal documents are extracted locally. Personal identifiers (Aadhaar, PAN, phone numbers, emails, bank accounts) are automatically redacted via `redactPii()` before any outbound call.
-2. **Authoritative Classifier Grounding:** The Form2Fact hybrid classifier output (e.g. `MISMATCH`, 98% confidence) and statutory rule citations are assembled into an evidence-first prompt.
-3. **Reasoning Synthesis:** BharatCode Qwen 3.8 27B generates an objective explanation detailing why the claim and evidence contradict or align.
-4. **Dual Grounding Guards:**
-   - *Hallucination Guard:* Automatically cross-validates citations and strips any cited document name or page number not present in the ingested evidence.
-   - *Classifier Override Guard:* Prohibits the LLM from altering or overriding the classifier label or approving/rejecting an institution.
-5. **Interactive Verification:** The explanation is rendered in the Findings workspace with direct clickable links jumping to the cited document page in the split-screen evidence viewer.
-6. **Graceful Fallback:** If `BHARATCODE_API_KEY` is not configured (or the API returns 401/402/429/5xx), the platform preserves deterministic findings without fabricating responses.
-7. **Provider Chain for Deep Scrutiny:** Gemini `gemini-4-argon` (primary, when `GEMINI_API_KEY` is set) → BharatCode `qwen-3.8-27b` (advisory) → deterministic local synthesis (always-available last resort). This is a documented provider chain, not a silent model substitution.
-8. **Reasoning-Model Handling:** `qwen-3.8-27b` is a reasoning model; the service handles `content: null` (chain-of-thought token exhaustion) explicitly and uses a 60 s default timeout (configurable via `BHARATCODE_TIMEOUT_MS`).
-9. **Quota Honesty:** the free student tier is capped at 10 M tokens/day (resets midnight IST) and is shared between development assistance and application inference. Live inference is currently blocked at the credential/subscription layer; the deterministic finding is preserved either way.
+```mermaid
+flowchart LR
+    Task[Scrutiny Task] --> Router{ModelRouter}
+
+    Router -->|field_comparison| Champion[Form2Fact Native Classifier<br/><b>AUTHORITATIVE</b>]
+    Router -->|evidence_explanation| Qwen[BharatCode Qwen 3.8 27B<br/><i>Advisory Reasoning</i>]
+    Router -->|evidence_explanation| DeepSeek[BharatCode DeepSeek v4.1<br/><i>Long-Context Reasoning</i>]
+    Router -->|evidence_explanation| Adaption[Adaption SFT Model<br/><i>Domain Adapted</i>]
+    Router -->|document_scrutiny| DeepSeekMemo[DeepSeek v4.1 Flash<br/><i>Docket Synthesis</i>]
+
+    Qwen --> Guards[Citation Grounding &<br/>Classifier Override Guard]
+    DeepSeek --> Guards
+    Adaption --> Guards
+
+    Guards --> Findings[Findings View UI<br/>EN / தமிழ் Toggle]
+```
+
+### 1. Task-Based Routing Policy:
+1. **Field Comparison (`field_comparison`):** Routed **exclusively** to the native Form2Fact pairwise classifier. External LLMs can never execute primary field verification.
+2. **Evidence Explanation (`evidence_explanation`):** Dynamically routed to the reviewer's selected model (BharatCode Qwen, DeepSeek, or Adaption).
+3. **Document Scrutiny (`document_scrutiny`):** Routed to DeepSeek v4.1 Flash (or Qwen) to generate cross-document holistic scrutiny memos.
+
+### 2. Dual Grounding Guards & Anti-Hallucination:
+- **Citation Integrity Filter:** The model's cited document names and page numbers are cross-referenced against `validEvidenceSources` in the ingested docket. Hallucinated or non-existent citations are stripped before presentation, and a warning is logged to `groundingAlerts`.
+- **Classifier Overwrite Protection:** If an external LLM attempts to propose a conflicting classification (e.g. proposing `MATCH` on an authoritative `MISMATCH`), the router rejects the change, forcibly restores the authoritative label, and sets `requires_human_review = true`.
+
+### 3. Bilingual Scrutiny Support:
+The Findings UI provides a one-click language toggle between **English** and **Tamil (`தமிழ்`)**, enabling scrutiny officers to review evidence explanations in the appropriate state administrative language.
+
+### 4. Controlled Failure Modes & Token Exhaustion:
+- **Reasoning Token Exhaustion Handling:** Qwen 3.8 27B spends token budget on internal reasoning (`message.reasoning_content`); if completion content is empty, the adapter returns a clean explanatory diagnostic rather than crashing.
+- **Fail-Closed Architecture:** Unconfigured or unverified endpoints return `{ success: false, status: 'unavailable' }`. Deterministic findings remain 100% operational even without active external API keys.
 
 ---
 
@@ -349,32 +397,38 @@ form2fact/
 │   ├── rulesEngine.ts                 # AICTE regulatory compliance rules
 │   ├── core/                          # Enterprise storage, logging, jobs, and errors
 │   ├── modules/
-│   │   ├── explanation/               # BharatCode Qwen 3.8 27B AI reasoning service
+│   │   ├── ai/                        # Multi-Model AI Orchestration Layer
+│   │   │   └── providers/             # Qwen, DeepSeek, Adaption, Classifier adapters & Router
 │   │   ├── organizations/             # Regional tenant organization manager
 │   │   └── verification/              # Pairwise classification engine
 │   └── tests/
-│       ├── bharatCodeIntegration.test.ts # 12-point BharatCode API verification suite
-│       ├── dataIntegrity.test.ts      # 111-point data integrity test suite
-│       └── test-runner.ts             # 23-scenario regression test harness
+│       ├── multiModelOrchestration.test.ts # Multi-model routing & adapter suite
+│       ├── bharatCodeIntegration.test.ts   # BharatCode API verification suite
+│       ├── dataIntegrity.test.ts           # 111-point data integrity test suite
+│       └── test-runner.ts                  # 24-scenario regression test harness
 ├── src/                               # React 19 Frontend
 │   ├── App.tsx                        # Master application state router
-│   ├── components/                    # Core view components (Overview, Review, Rules)
+│   ├── components/                    # Core view components (FindingsView with Multi-Model Toolbar)
 │   ├── services/                      # Frontend API client
 │   └── shared/                        # Reusable UI components & status badges
 ├── ai_service/                        # Python FastAPI & ML Service
 │   ├── app/main.py                    # FastAPI application routes
+│   ├── app/ocr.py                     # Multilingual OCR (eng+tam+hin) and PyMuPDF text layer
 │   ├── ml/
 │   │   ├── inference.py               # Calibrated champion inference engine
 │   │   ├── artifacts/                 # Model weights and temperature config
-│   │   └── data/                      # Legitimate training & benchmark jsonl files
-│   └── ocr/                           # OCR textract and tesseract handlers
+│   │   └── data/
+│   │       └── adaption/              # Verified Adaption splits (train, validation, test)
+│   └── tests/                         # Pytest suites for OCR and ML pipeline
 ├── sample_documents/                  # Ready-to-test sample institutional PDFs
 ├── docs/                              # Comprehensive engineering documentation
+│   ├── engineering/                   # Multi-model architecture, Qwen/DeepSeek & verification reports
+│   ├── ml/adaption/                   # Adaption dataset audit, validation, and onboarding guides
 │   ├── bharatcode/                    # BharatCode Build League 2026 integration & audit reports
 │   ├── assets/screenshots/            # Genuine application screenshots
-│   ├── data-integrity/                # Mock removal and integrity audit reports
-│   └── release/                       # Final verification and release reports
+│   └── data-integrity/                # Mock removal and integrity audit reports
 └── infrastructure/
+    ├── db/                            # PostgreSQL authoritative schema & SQLite migration script
     └── docker-compose.yml             # Container orchestration
 ```
 
@@ -437,13 +491,18 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `DATABASE_PATH` | `./data/form2fact.db` | Custom path | File path for persistent SQLite database. |
 | `DOCUMENT_STORAGE_PATH` | `./data/dockets` | Custom path | Storage directory for uploaded applicant PDFs. |
 | `AI_SERVICE_URL` | `http://localhost:8000` | `http://ai-service:8000` | Internal URL for pairwise classifier and OCR microservice. |
+| `FORM2FACT_OCR_LANG` | `eng+tam` | `eng+tam` (or `eng+tam+hin`) | Supported OCR language packs for Tesseract engine. |
 | `OCR_SERVICE_TOKEN` | `form2fact_ocr_secret_token_2026` | Secure Secret | Authentication token for internal OCR endpoints. |
 | `BOOTSTRAP_SECRET` | *(disabled)* | Secure Secret | Pre-shared out-of-band secret authorizing initial administrator bootstrap. |
 | `BOOTSTRAP_ADMIN_EMAIL` | *(none)* | Valid email | One-time initial administrator account email on empty database. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | *(none)* | $\ge 12$ chars | One-time initial administrator password (scrubbed from memory immediately). |
 | `BHARATCODE_API_URL` | `https://bharatcode.ai/api/model/v1` | Production URL | Base URL for official BharatCode Model API. |
 | `BHARATCODE_API_KEY` | *(none)* | Secure Token (`bc_live_...`) | Live Bearer API key for generating AI explanations via Qwen 3.8 27B. |
-| `BHARATCODE_MODEL` | `qwen-3.8-27b` | `qwen-3.8-27b` | Active model identifier for evidence-grounded legal explanations. |
+| `BHARATCODE_MODEL` | `qwen-3.8-27b` | `qwen-3.8-27b` | Active Qwen model identifier for evidence-grounded legal explanations. |
+| `BHARATCODE_DEEPSEEK_API_KEY` | *(uses BHARATCODE_API_KEY)*| Secure Token | Dedicated API key for BharatCode DeepSeek v4.1 Flash long-context analysis. |
+| `BHARATCODE_DEEPSEEK_MODEL` | `deepseek-v4.1-flash` | `deepseek-v4.1-flash` | Active DeepSeek model identifier for cross-document scrutiny memos. |
+| `ADAPTION_MODEL_ENDPOINT` | *(none)* | HTTPS URL | Hosted inference endpoint for fine-tuned Adaption AutoScientist model. |
+| `ADAPTION_MODEL_VERIFIED` | `false` | `true` | Gatekeeper flag enabling Adaption provider only after offline benchmark evaluation. |
 
 ---
 
@@ -461,10 +520,13 @@ docker compose -f infrastructure/docker-compose.yml up --build
 | `POST` | `/api/v1/applications/:id/documents` | Reviewer / Admin | Upload statutory PDF evidence with magic-byte validation. |
 | `GET` | `/api/v1/applications/:id/documents/:docId/file` | Authenticated | Stream stored PDF with path traversal defense. |
 | `DELETE` | `/api/v1/documents/:id` | Reviewer / Admin | Transactional deletion of document and cascading fields. |
-| `POST` | `/api/v1/verification/pairwise` | Authenticated | Execute pairwise comparison between claim and evidence. |
+| `POST` | `/api/v1/verification/pairwise` | Authenticated | Execute pairwise comparison between claim and evidence (routes to native classifier). |
 | `POST` | `/api/v1/findings/:id/review` | Reviewer / Admin | Record human reviewer adjudication and commit audit event. |
-| `POST` | `/api/v1/findings/:id/explain` | Authenticated | Generate evidence-grounded AI explanation via BharatCode Qwen 3.8 27B. |
-| `POST` | `/api/v1/ai/bharatcode/explain` | Authenticated | Arbitrary claim/evidence pairwise AI explanation with citation verification. |
+| `GET` | `/api/v1/ai/providers` | Authenticated | Discover registered AI model providers, task capabilities, and live health status. |
+| `GET` | `/api/v1/ai/providers/:id/health` | Authenticated | Live health probe for a specific multi-model provider. |
+| `POST` | `/api/v1/findings/:id/explain` | Authenticated | Generate evidence-grounded AI explanation (accepts optional `providerId` and `preferredLanguage`: `'en'` or `'ta'`). |
+| `POST` | `/api/v1/ai/explain` | Authenticated | Arbitrary multi-model claim/evidence pairwise explanation with citation verification. |
+| `POST` | `/api/v1/ai/bharatcode/explain` | Authenticated | Legacy endpoint for BharatCode Qwen pairwise explanations. |
 | `GET` | `/api/v1/audit` | Authenticated | Retrieve append-only chronological audit log. |
 | `GET` | `/api/v1/rules` | Authenticated | Retrieve AICTE regulatory rules catalog. |
 
@@ -529,7 +591,27 @@ node ./node_modules/tsx/dist/cli.mjs server/tests/stagingOperationalRehearsal.te
 #    tenant isolation -> RBAC. Reports PASS/FAIL/BLOCKED.
 npm run dev &amp;
 node scripts/e2e-validation.mjs
+
+# 10. Run Playwright Authentic-Document Browser E2E Suite (10 Scenarios)
+#     Processes 55 real institutional pages (SFR College, S.A. College, Good Shepherd AICTE EoA)
+#     Captures UI screenshots to test-results/screenshots/
+npx playwright test e2e/real-document-verification.spec.ts
+
+# 11. Run Held-Out ML Test Split Benchmark (N = 83, Template-Isolated)
+python scripts/ml/benchmark_test_split.py
 ```
+
+---
+
+## 18.5. BharatCode Judges' Demonstration Package
+
+For the BharatCode Build League 2026 evaluation committee:
+
+- [**Judges' Demonstration Guide**](docs/demo/JUDGES_DEMONSTRATION_GUIDE.md): Executive summary, 5-class taxonomy, 4-tier authority architecture, and rapid evaluation protocol.
+- [**Authentic Document Manifest**](docs/demo/DEMONSTRATION_DOCUMENT_MANIFEST.md): Provenance, page counts, and SHA-256 cryptographic hashes for the 3 authorized institutional PDFs.
+- [**Demonstration Workflow**](docs/demo/DEMONSTRATION_WORKFLOW.md): Step-by-step interactive scrutiny runbook with sequence diagrams and expected outcomes.
+- [**Real-Document Playwright E2E Report**](docs/testing/REAL_DOCUMENT_PLAYWRIGHT_E2E_REPORT.md): Browser verification audit processing 55 authentic PDF pages with zero mocks.
+- [**Multi-Model Comparative Evaluation**](docs/ml/MULTI_MODEL_COMPARATIVE_EVALUATION.md): Quantitative benchmark on the held-out test split ($N = 83$).
 
 ---
 
